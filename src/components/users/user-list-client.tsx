@@ -1,0 +1,245 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { SearchBar } from "@/components/ui/search-bar";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Chip } from "@/components/ui/chip";
+import { Button } from "@/components/ui/button";
+import { PermissionGate } from "@/components/shared/permission-gate";
+import { useBranches } from "@/hooks/use-branches";
+import { FAB } from "@/components/ui/fab";
+import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
+import { Icon } from "@/components/ui/icon";
+
+const ROLE_OPTIONS = [
+  { value: "ALL", label: "All Roles" },
+  { value: "SCHOOL_ADMIN", label: "School Admin" },
+  { value: "BRANCH_ADMIN", label: "Branch Admin" },
+  { value: "TEACHER", label: "Teacher" },
+  { value: "STUDENT", label: "Student" },
+  { value: "PARENT", label: "Parent" },
+  { value: "ACCOUNTANT", label: "Accountant" },
+  { value: "LIBRARIAN", label: "Librarian" },
+  { value: "RECEPTIONIST", label: "Receptionist" },
+  { value: "TRANSPORT_MANAGER", label: "Transport Manager" },
+];
+
+interface UserRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+  branch: { id: string; name: string } | null;
+}
+
+const roleLabel = (role: string) =>
+  role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+function UserAvatar({ name }: { name: string }) {
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-lg font-medium shrink-0">
+      {initials}
+    </span>
+  );
+}
+
+export function UserListClient() {
+  const router = useRouter();
+  const { branches } = useBranches();
+
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    params.set("limit", "9999");
+    if (roleFilter !== "ALL") params.set("role", roleFilter);
+    if (branchFilter !== "ALL") params.set("branchId", branchFilter);
+
+    try {
+      const res = await fetch(`/api/v1/users?${params}`);
+      const data = await res.json();
+      if (data.success) {
+        setUsers(data.data);
+      }
+    } catch {
+      // silently fail; loading state will clear
+    } finally {
+      setLoading(false);
+    }
+  }, [roleFilter, branchFilter]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const columns: Column<UserRow>[] = [
+    {
+      key: "name",
+      header: "Name",
+      render: (row) => (
+        <div className="flex items-center gap-3">
+          <UserAvatar name={row.name} />
+          <span className="font-medium">{row.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: "email",
+      header: "Email",
+      render: (row) => row.email,
+    },
+    {
+      key: "role",
+      header: "Role",
+      render: (row) => (
+        <Chip label={roleLabel(row.role)} variant="filled" color="primary" />
+      ),
+    },
+    {
+      key: "branch",
+      header: "Branch",
+      render: (row) => row.branch?.name ?? "—",
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => (
+        <Chip
+          label={row.isActive ? "Active" : "Inactive"}
+          variant="filled"
+          color={row.isActive ? "success" : "error"}
+          icon={row.isActive ? "check_circle" : "cancel"}
+        />
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (row) => (
+        <Menu>
+          <MenuTrigger asChild>
+            <button
+              type="button"
+              className="rounded-full p-1 hover:bg-on-surface/8 cursor-pointer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Icon name="more_vert" size={20} className="text-on-surface-variant" />
+            </button>
+          </MenuTrigger>
+          <MenuContent>
+            <MenuItem
+              icon="edit"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/users/${row.id}/edit`);
+              }}
+            >
+              Edit
+            </MenuItem>
+          </MenuContent>
+        </Menu>
+      ),
+      className: "w-12",
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+          <SearchBar
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Search users"
+            className="sm:max-w-xs"
+          />
+          <Select
+            value={roleFilter}
+            onValueChange={setRoleFilter}
+          >
+            <SelectTrigger className="min-w-[160px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ROLE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {branches.length > 1 && (
+            <Select
+              value={branchFilter}
+              onValueChange={setBranchFilter}
+            >
+              <SelectTrigger className="min-w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Branches</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <PermissionGate module="users" action="create">
+          <Button
+            variant="filled"
+            icon="person_add"
+            onClick={() => router.push("/users/new")}
+            className="hidden md:inline-flex"
+          >
+            Add User
+          </Button>
+        </PermissionGate>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-md border border-outline-variant bg-surface overflow-hidden">
+        <DataTable
+          columns={columns}
+          data={users}
+          keyExtractor={(row) => row.id}
+          onRowClick={(row) => router.push(`/users/${row.id}/edit`)}
+          loading={loading}
+          emptyIcon="group_off"
+          emptyMessage="No users found"
+          quickFilter={searchInput}
+        />
+      </div>
+
+      <PermissionGate module="users" action="create">
+        <FAB icon="person_add" onClick={() => router.push("/users/new")} />
+      </PermissionGate>
+    </div>
+  );
+}

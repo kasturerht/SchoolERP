@@ -1,0 +1,136 @@
+import type { UserRole } from "@prisma/client";
+
+/**
+ * All modules and their available actions.
+ */
+export const MODULES = {
+  students: ["create", "read", "update", "delete"],
+  staff: ["create", "read", "update", "delete"],
+  attendance: ["create", "read", "update"],
+  fees: ["create", "read", "update", "approve"],
+  exams: ["create", "read", "update", "grade"],
+  timetable: ["read", "manage"],
+  transport: ["read", "manage"],
+  library: ["read", "manage"],
+  hostel: ["read", "manage"],
+  notices: ["create", "read", "update", "delete"],
+  events: ["create", "read", "update", "delete"],
+  reports: ["view", "export"],
+  settings: ["manage"],
+  classes: ["create", "read", "update", "delete"],
+  academic_years: ["create", "read", "update", "delete"],
+  branches: ["read", "manage"],
+  users: ["create", "read", "update", "delete"],
+} as const;
+
+/**
+ * Default permissions per role.
+ * SUPER_ADMIN gets everything automatically (handled in rbac.ts).
+ */
+export const DEFAULT_ROLE_PERMISSIONS: Partial<
+  Record<UserRole, string[]>
+> = {
+  SCHOOL_ADMIN: [
+    "students:create", "students:read", "students:update", "students:delete",
+    "staff:create", "staff:read", "staff:update", "staff:delete",
+    "attendance:create", "attendance:read", "attendance:update",
+    "fees:create", "fees:read", "fees:update", "fees:approve",
+    "exams:create", "exams:read", "exams:update", "exams:grade",
+    "timetable:read", "timetable:manage",
+    "transport:read", "transport:manage",
+    "library:read", "library:manage",
+    "hostel:read", "hostel:manage",
+    "notices:create", "notices:read", "notices:update", "notices:delete",
+    "events:create", "events:read", "events:update", "events:delete",
+    "reports:view", "reports:export",
+    "settings:manage",
+    "classes:create", "classes:read", "classes:update", "classes:delete",
+    "academic_years:create", "academic_years:read", "academic_years:update", "academic_years:delete",
+    "branches:read", "branches:manage",
+    "users:create", "users:read", "users:update", "users:delete",
+  ],
+  BRANCH_ADMIN: [
+    "students:create", "students:read", "students:update",
+    "staff:create", "staff:read", "staff:update",
+    "fees:create", "fees:read", "fees:update", "fees:approve",
+    "notices:create", "notices:read", "notices:update",
+    "reports:view", "reports:export",
+    "classes:create", "classes:read", "classes:update", "classes:delete",
+    "academic_years:create", "academic_years:read", "academic_years:update", "academic_years:delete",
+    "branches:read",
+  ],
+  TEACHER: [
+    "students:read",
+    "staff:read",
+    "attendance:create", "attendance:read",
+    "exams:read", "exams:grade",
+    "timetable:read",
+    "library:read",
+    "notices:read",
+    "events:read",
+    "reports:view",
+    "classes:read",
+  ],
+  STUDENT: [
+    "attendance:read",
+    "fees:read",
+    "exams:read",
+    "timetable:read",
+    "library:read",
+    "notices:read",
+    "events:read",
+  ],
+  PARENT: [
+    "students:read",
+    "attendance:read",
+    "fees:read",
+    "exams:read",
+    "timetable:read",
+    "notices:read",
+    "events:read",
+  ],
+  ACCOUNTANT: [
+    "students:read",
+    "fees:create", "fees:read", "fees:update", "fees:approve",
+    "reports:view", "reports:export",
+    "classes:read",
+  ],
+  LIBRARIAN: [
+    "students:read",
+    "library:read", "library:manage",
+  ],
+  RECEPTIONIST: [
+    "students:read",
+    "staff:read",
+    "notices:read",
+    "events:read",
+  ],
+  TRANSPORT_MANAGER: [
+    "students:read",
+    "transport:read", "transport:manage",
+  ],
+};
+
+/**
+ * Sidebar navigation items per role.
+ */
+export const NAVIGATION_ITEMS = [
+  { label: "Dashboard", href: "/dashboard", icon: "dashboard", roles: "all" as const },
+  { label: "Students", href: "/students", icon: "school", permission: "students:read" },
+  { label: "Staff", href: "/staff", icon: "badge", permission: "staff:read" },
+  { label: "Attendance", href: "/attendance/students", icon: "fact_check", permission: "attendance:read" },
+  { label: "Fees", href: "/fees", icon: "payments", permission: "fees:read" },
+  // { label: "Exams", href: "/exams", icon: "quiz", permission: "exams:read" },
+  // { label: "Timetable", href: "/timetable", icon: "calendar_month", permission: "timetable:read" },
+  // { label: "Transport", href: "/transport/routes", icon: "directions_bus", permission: "transport:read" },
+  // { label: "Library", href: "/library/books", icon: "local_library", permission: "library:read" },
+  // { label: "Hostel", href: "/hostel", icon: "apartment", permission: "hostel:read" },
+  // { label: "Notices", href: "/communication/notices", icon: "campaign", permission: "notices:read" },
+  // { label: "Events", href: "/communication/events", icon: "event", permission: "events:read" },
+  // { label: "Reports", href: "/reports", icon: "analytics", permission: "reports:view" },
+  { label: "Classes", href: "/classes", icon: "class", permission: "classes:read" },
+  { label: "Academic Years", href: "/academic-years", icon: "date_range", permission: "academic_years:read" },
+  { label: "Branches", href: "/branches", icon: "location_city", permission: "branches:manage" },
+  { label: "Users", href: "/users", icon: "group", permission: "users:read" },
+  { label: "Settings", href: "/settings/general", icon: "settings", permission: "settings:manage" },
+];
