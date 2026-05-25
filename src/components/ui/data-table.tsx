@@ -18,6 +18,7 @@ export interface Column<T> {
   key: string;
   header: string;
   render: (row: T) => React.ReactNode;
+  sortValue?: (row: T) => string | number | null;
   className?: string;
 }
 
@@ -65,6 +66,9 @@ export function DataTable<T>({
         field: col.key,
         headerName: col.header,
         cellRenderer: (params: { data: T }) => col.render(params.data),
+        ...(col.sortValue
+          ? { valueGetter: (params: { data: T }) => params.data ? col.sortValue!(params.data) : null }
+          : {}),
         sortable: col.key !== "actions",
         filter: col.key !== "actions",
         suppressHeaderMenuButton: col.key === "actions",

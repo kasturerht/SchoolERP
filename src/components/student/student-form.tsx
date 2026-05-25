@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   updateStudentSchema,
   BLOOD_GROUPS,
   ID_TYPES,
+  PAYMENT_MODES,
 } from "@/lib/validations/student";
 
 const GENDERS = [
@@ -30,6 +31,14 @@ const GENDERS = [
   { value: "FEMALE", label: "Female" },
   { value: "OTHER", label: "Other" },
 ] as const;
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  CASH: "Cash",
+  UPI: "UPI",
+  CHEQUE: "Cheque",
+  BANK_TRANSFER: "Bank Transfer",
+  ONLINE: "Online",
+};
 
 interface ClassOption {
   id: string;
@@ -43,6 +52,7 @@ interface SectionOption {
 }
 
 interface FeeInfo {
+  id: string;
   name: string;
   amount: number;
   frequency: string;
@@ -83,6 +93,10 @@ interface StudentData {
       class: { id: string; name: string };
     };
   }>;
+  classId?: string | null;
+  totalFees?: number;
+  totalFeesPaid?: number;
+  pendingFees?: number;
 }
 
 interface StudentFormProps {
@@ -103,7 +117,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const { data: session } = useSession();
   const { branches, isLoading: branchesLoading } = useBranches();
 
-  const isBranchAdmin = session?.user?.role === "BRANCH_ADMIN";
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
 
   // Personal Information
   const [firstName, setFirstName] = useState(initialData?.firstName ?? "");
@@ -136,7 +150,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const [admissionDate, setAdmissionDate] = useState(formatDateForInput(initialData?.admissionDate));
   const [branchId, setBranchId] = useState(initialData?.branch?.id ?? "");
   const [classId, setClassId] = useState(
-    initialData?.enrollments?.[0]?.section?.class?.id ?? ""
+    initialData?.enrollments?.[0]?.section?.class?.id ?? initialData?.classId ?? ""
   );
   const [sectionId, setSectionId] = useState(
     initialData?.enrollments?.[0]?.section?.id ?? ""
@@ -152,15 +166,46 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
   const [fees, setFees] = useState<FeeInfo[]>([]);
   const [feesLoading, setFeesLoading] = useState(false);
 
+  // Fee collection (create mode only)
+  const [discountPercent, setDiscountPercent] = useState("");
+  const [amountPaid, setAmountPaid] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("personal");
 
-  // Auto-assign branch for BRANCH_ADMIN
+  const TABS = ["personal", "family", "admin"] as const;
+  const tabIndex = TABS.indexOf(activeTab as (typeof TABS)[number]);
+
+  // Fee computation
+  const annualTotal = useMemo(
+    () =>
+      fees.reduce((sum, f) => {
+        switch (f.frequency) {
+          case "MONTHLY": return sum + f.amount * 12;
+          case "QUARTERLY": return sum + f.amount * 4;
+          case "SEMI_ANNUAL": return sum + f.amount * 2;
+          default: return sum + f.amount;
+        }
+      }, 0),
+    [fees]
+  );
+
+  const discountAmt = annualTotal * (parseFloat(discountPercent) || 0) / 100;
+  const discountedTotal = annualTotal - discountAmt;
+  const paidNum = parseFloat(amountPaid) || 0;
+  const remainingAmount = Math.max(0, discountedTotal - paidNum);
+
+  const showTransactionId = paymentMethod === "UPI" || paymentMethod === "ONLINE" || paymentMethod === "BANK_TRANSFER";
+
+  // Auto-assign branch for non-SUPER_ADMIN users
   useEffect(() => {
-    if (isBranchAdmin && session?.user?.branchId && !branchId) {
+    if (!isSuperAdmin && session?.user?.branchId && !branchId) {
       setBranchId(session.user.branchId);
     }
-  }, [isBranchAdmin, session?.user?.branchId, branchId]);
+  }, [isSuperAdmin, session?.user?.branchId, branchId]);
 
   // Fetch classes when branch changes
   useEffect(() => {
@@ -205,6 +250,10 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
 
   // Fetch fees when class changes
   useEffect(() => {
+    setDiscountPercent("");
+    setAmountPaid("");
+    setPaymentMethod("");
+    setTransactionId("");
     if (!classId) {
       setFees([]);
       return;
@@ -250,7 +299,12 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       motherOccupation: motherOccupation || undefined,
       admissionDate: admissionDate || undefined,
       branchId,
+      classId,
       sectionId,
+      discountPercent: discountPercent || undefined,
+      amountPaid: amountPaid || undefined,
+      paymentMethod: paymentMethod || undefined,
+      transactionId: transactionId || undefined,
     };
 
     if (mode === "create") {
@@ -344,7 +398,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-      <Tabs defaultValue="personal">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="family">Family & Address</TabsTrigger>
@@ -620,7 +674,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                   error={errors.admissionDate}
                   fullWidth
                 />
-                {!isBranchAdmin && (
+                {isSuperAdmin && (
                   <div className="flex flex-col gap-1">
                     <label className="text-label-md text-on-surface-variant px-1">
                       Branch *
@@ -668,7 +722,7 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-label-md text-on-surface-variant px-1">
-                    Division *
+                    Division
                   </label>
                   <Select
                     value={sectionId}
@@ -696,29 +750,122 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                 <p className="text-body-sm text-on-surface-variant">Loading fees...</p>
               )}
               {fees.length > 0 && !feesLoading && (
-                <div className="rounded-lg border border-outline-variant p-4 space-y-2">
-                  <p className="text-label-lg font-medium text-on-surface">Fee Structure</p>
-                  {fees.map((fee, i) => (
-                    <div key={i} className="flex items-center justify-between text-body-sm text-on-surface-variant">
-                      <span>{fee.name}</span>
-                      <span>₹{fee.amount.toLocaleString("en-IN")} / {fee.frequency.replace(/_/g, " ").toLowerCase()}</span>
+                <>
+                  <div className="rounded-lg border border-outline-variant p-4 space-y-2">
+                    <p className="text-label-lg font-medium text-on-surface">Fee Structure</p>
+                    {fees.map((fee, i) => (
+                      <div key={i} className="flex items-center justify-between text-body-sm text-on-surface-variant">
+                        <span>{fee.name}</span>
+                        <span>₹{fee.amount.toLocaleString("en-IN")} / {fee.frequency.replace(/_/g, " ").toLowerCase()}</span>
+                      </div>
+                    ))}
+                    <Divider />
+                    <div className="flex items-center justify-between">
+                      <p className="text-label-md font-medium text-on-surface">Estimated Annual Total</p>
+                      <p className="text-label-md font-semibold text-on-surface">
+                        ₹{annualTotal.toLocaleString("en-IN")}
+                      </p>
                     </div>
-                  ))}
-                  <Divider />
-                  <div className="flex items-center justify-between">
-                    <p className="text-label-md font-medium text-on-surface">Estimated Annual Total</p>
-                    <p className="text-label-md font-semibold text-on-surface">
-                      ₹{fees.reduce((sum, f) => {
-                        switch (f.frequency) {
-                          case "MONTHLY": return sum + f.amount * 12;
-                          case "QUARTERLY": return sum + f.amount * 4;
-                          case "SEMI_ANNUAL": return sum + f.amount * 2;
-                          default: return sum + f.amount;
-                        }
-                      }, 0).toLocaleString("en-IN")}
-                    </p>
                   </div>
-                </div>
+
+                  {mode === "create" && (
+                    <div className="rounded-lg border border-outline-variant p-4 space-y-4">
+                      <p className="text-label-lg font-medium text-on-surface">Fee Collection</p>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <TextField
+                          label="Discount %"
+                          type="number"
+                          value={discountPercent}
+                          onChange={(e) => setDiscountPercent(e.target.value)}
+                          error={errors.discountPercent}
+                          fullWidth
+                        />
+                        <div className="flex flex-col justify-end">
+                          <p className="text-body-sm text-on-surface-variant">Discounted Total</p>
+                          <p className="text-label-lg font-semibold text-on-surface">
+                            ₹{discountedTotal.toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <TextField
+                          label="Amount Paid"
+                          type="number"
+                          value={amountPaid}
+                          onChange={(e) => setAmountPaid(e.target.value)}
+                          error={errors.amountPaid}
+                          fullWidth
+                        />
+                        <div className="flex flex-col justify-end">
+                          <p className="text-body-sm text-on-surface-variant">Remaining</p>
+                          <p className="text-label-lg font-semibold text-on-surface">
+                            ₹{remainingAmount.toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-label-md text-on-surface-variant px-1">
+                            Payment Method
+                          </label>
+                          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                            <SelectTrigger fullWidth>
+                              <SelectValue placeholder="Select method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAYMENT_MODES.map((m) => (
+                                <SelectItem key={m} value={m}>
+                                  {PAYMENT_METHOD_LABELS[m]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.paymentMethod && (
+                            <p className="px-4 text-[12px] leading-4 text-error">{errors.paymentMethod}</p>
+                          )}
+                        </div>
+                        {showTransactionId && (
+                          <TextField
+                            label="Transaction ID"
+                            value={transactionId}
+                            onChange={(e) => setTransactionId(e.target.value)}
+                            error={errors.transactionId}
+                            fullWidth
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {mode === "edit" && initialData?.totalFees != null && initialData.totalFees > 0 && (
+                    <div className="rounded-lg border border-outline-variant p-4 space-y-4">
+                      <p className="text-label-lg font-medium text-on-surface">Fee Summary</p>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <TextField
+                          label="Total Fees"
+                          value={`₹${initialData.totalFees.toLocaleString("en-IN")}`}
+                          readOnly
+                          fullWidth
+                        />
+                        <TextField
+                          label="Collected"
+                          value={`₹${(initialData.totalFeesPaid ?? 0).toLocaleString("en-IN")}`}
+                          readOnly
+                          fullWidth
+                        />
+                        <TextField
+                          label="Remaining"
+                          value={`₹${(initialData.pendingFees ?? 0).toLocaleString("en-IN")}`}
+                          readOnly
+                          fullWidth
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -726,17 +873,44 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
       </Tabs>
 
       {/* ── Actions ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 pt-6">
-        <Button
-          type="button"
-          variant="outlined"
-          onClick={() => router.push("/students")}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" variant="filled" loading={loading} icon="save">
-          {mode === "create" ? "Admit Student" : "Save Changes"}
-        </Button>
+      <div className="flex items-center justify-between pt-6">
+        <div>
+          {tabIndex === 0 && (
+            <Button
+              type="button"
+              variant="outlined"
+              onClick={() => router.push("/students")}
+            >
+              Cancel
+            </Button>
+          )}
+          {tabIndex > 0 && (
+            <Button
+              type="button"
+              variant="outlined"
+              icon="arrow_back"
+              onClick={() => setActiveTab(TABS[tabIndex - 1])}
+            >
+              Back
+            </Button>
+          )}
+        </div>
+        <div>
+          {tabIndex < TABS.length - 1 && (
+            <Button
+              type="button"
+              variant="filled"
+              onClick={() => setActiveTab(TABS[tabIndex + 1])}
+            >
+              {tabIndex === 0 ? "Continue" : "Next"}
+            </Button>
+          )}
+          {tabIndex === TABS.length - 1 && (
+            <Button type="submit" variant="filled" loading={loading} icon="save">
+              {mode === "create" ? "Admit Student" : "Save Changes"}
+            </Button>
+          )}
+        </div>
       </div>
     </form>
   );

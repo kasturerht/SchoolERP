@@ -286,6 +286,7 @@ model Student {
 
   enrollments    StudentEnrollment[]
   parentLinks    StudentParent[]
+  invoices       Invoice[]
   feePayments    FeePayment[]
   attendances    StudentAttendance[]
   marks          Mark[]
@@ -604,6 +605,7 @@ model Invoice {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  student  Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   items    InvoiceItem[]
   payments FeePayment[]
 

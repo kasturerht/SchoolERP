@@ -80,7 +80,20 @@ export const createStudentSchema = z.object({
   motherOccupation: z.string().max(100).optional().or(z.literal("")),
   admissionDate: z.string().optional().or(z.literal("")),
   branchId: z.string().min(1, "Branch is required"),
-  sectionId: z.string().min(1, "Section is required"),
+  classId: z.string().optional().or(z.literal("")),
+  sectionId: z.string().optional().or(z.literal("")),
+
+  // Fee collection (optional — only when collecting fees at admission)
+  discountPercent: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(0, "Discount cannot be negative").max(100, "Discount cannot exceed 100%").optional()
+  ),
+  amountPaid: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(0, "Amount cannot be negative").optional()
+  ),
+  paymentMethod: z.enum(PAYMENT_MODES).optional().or(z.literal("")),
+  transactionId: z.string().max(100).optional().or(z.literal("")),
 });
 
 export const updateStudentSchema = z.object({

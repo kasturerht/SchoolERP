@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { SearchBar } from "@/components/ui/search-bar";
 import {
   Select,
@@ -27,9 +28,17 @@ interface StudentRow {
   admissionNo: string;
   gender: string;
   status: string;
+  dateOfBirth: string;
   admissionDate: string;
+  fatherPhone: string | null;
+  motherPhone: string | null;
+  emergencyContact1: string | null;
+  totalFees: number;
+  totalFeesPaid: number;
+  pendingFees: number;
   branch: { id: string; name: string };
   enrollments: Array<{
+    rollNo: string | null;
     section: {
       id: string;
       name: string;
@@ -68,6 +77,8 @@ function StudentAvatar({ firstName, lastName }: { firstName: string; lastName: s
 
 export default function StudentsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
   const { branches } = useBranches();
 
   const [students, setStudents] = useState<StudentRow[]>([]);
@@ -98,10 +109,14 @@ export default function StudentsPage() {
     fetchStudents();
   }, [fetchStudents]);
 
+  const formatCurrency = (amount: number) =>
+    `₹${amount.toLocaleString("en-IN")}`;
+
   const columns: Column<StudentRow>[] = [
     {
       key: "name",
       header: "Name",
+      sortValue: (row) => `${row.firstName} ${row.lastName}`,
       render: (row) => (
         <div className="flex items-center gap-3">
           <StudentAvatar firstName={row.firstName} lastName={row.lastName} />
@@ -115,13 +130,23 @@ export default function StudentsPage() {
       ),
     },
     {
-      key: "class",
-      header: "Class",
+      key: "division",
+      header: "Division",
+      sortValue: (row) => {
+        const enrollment = row.enrollments?.[0];
+        if (!enrollment) return null;
+        return `${enrollment.section.class.name} - ${enrollment.section.name}`;
+      },
       render: (row) => {
         const enrollment = row.enrollments?.[0];
         if (!enrollment) return "—";
         return `${enrollment.section.class.name} - ${enrollment.section.name}`;
       },
+    },
+    {
+      key: "rollNo",
+      header: "Roll No",
+      render: (row) => row.enrollments?.[0]?.rollNo ?? "—",
     },
     {
       key: "gender",
@@ -132,14 +157,52 @@ export default function StudentsPage() {
           : "—",
     },
     {
-      key: "admissionDate",
-      header: "Admission Date",
+      key: "dateOfBirth",
+      header: "Date of Birth",
       render: (row) =>
-        new Date(row.admissionDate).toLocaleDateString("en-US", {
+        new Date(row.dateOfBirth).toLocaleDateString("en-IN", {
           year: "numeric",
           month: "short",
           day: "numeric",
         }),
+    },
+    {
+      key: "motherPhone",
+      header: "Mother Contact",
+      render: (row) => row.motherPhone || "—",
+    },
+    {
+      key: "fatherPhone",
+      header: "Father Contact",
+      render: (row) => row.fatherPhone || "—",
+    },
+    {
+      key: "emergencyContact",
+      header: "Emergency Contact",
+      render: (row) => row.emergencyContact1 || "—",
+    },
+    {
+      key: "totalFees",
+      header: "Total Fees",
+      render: (row) => formatCurrency(row.totalFees),
+    },
+    {
+      key: "totalFeesPaid",
+      header: "Collected",
+      render: (row) => (
+        <span className={row.totalFeesPaid > 0 ? "text-success font-medium" : ""}>
+          {formatCurrency(row.totalFeesPaid)}
+        </span>
+      ),
+    },
+    {
+      key: "pendingFees",
+      header: "Remaining",
+      render: (row) => (
+        <span className={row.pendingFees > 0 ? "text-error font-medium" : ""}>
+          {formatCurrency(row.pendingFees)}
+        </span>
+      ),
     },
     {
       key: "status",
@@ -204,7 +267,7 @@ export default function StudentsPage() {
               placeholder="Search students"
               className="sm:max-w-xs"
             />
-            {branches.length > 1 && (
+            {isSuperAdmin && branches.length > 1 && (
               <Select
                 value={branchFilter}
                 onValueChange={setBranchFilter}

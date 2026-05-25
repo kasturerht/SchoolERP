@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [students, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.student.findMany({
         where,
         select: {
@@ -52,12 +52,17 @@ export async function GET(req: NextRequest) {
           admissionNo: true,
           gender: true,
           status: true,
+          dateOfBirth: true,
           admissionDate: true,
+          fatherPhone: true,
+          motherPhone: true,
+          emergencyContact1: true,
           branch: { select: { id: true, name: true } },
           enrollments: {
             take: 1,
             orderBy: { enrolledAt: "desc" },
             select: {
+              rollNo: true,
               section: {
                 select: {
                   id: true,
@@ -67,6 +72,9 @@ export async function GET(req: NextRequest) {
               },
             },
           },
+          feePayments: {
+            select: { amount: true },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
@@ -74,6 +82,45 @@ export async function GET(req: NextRequest) {
       }),
       prisma.student.count({ where }),
     ]);
+
+    // Fetch invoice totals for these students to compute pending fees
+    const studentIds = rows.map((s) => s.id);
+    const invoiceTotals =
+      studentIds.length > 0
+        ? await prisma.invoice.groupBy({
+            by: ["studentId"],
+            where: {
+              studentId: { in: studentIds },
+              status: { not: "CANCELLED" },
+            },
+            _sum: { totalAmount: true, paidAmount: true },
+          })
+        : [];
+
+    const invoiceMap = new Map(
+      invoiceTotals.map((row) => [
+        row.studentId,
+        {
+          totalAmount: Number(row._sum.totalAmount ?? 0),
+          paidAmount: Number(row._sum.paidAmount ?? 0),
+        },
+      ])
+    );
+
+    const students = rows.map((s) => {
+      const inv = invoiceMap.get(s.id);
+      const totalPaid = s.feePayments.reduce(
+        (sum, fp) => sum + Number(fp.amount),
+        0
+      );
+      const { feePayments: _, ...rest } = s;
+      return {
+        ...rest,
+        totalFees: inv?.totalAmount ?? 0,
+        totalFeesPaid: totalPaid,
+        pendingFees: (inv?.totalAmount ?? 0) - (inv?.paidAmount ?? 0),
+      };
+    });
 
     return apiSuccess(students, { page, limit, total });
   } catch (error) {
@@ -127,17 +174,20 @@ export async function POST(req: NextRequest) {
       return apiError("NOT_FOUND", "Branch not found", 404);
     }
 
-    // Verify section exists and get its class + academic year
-    const section = await prisma.section.findFirst({
-      where: { id: data.sectionId },
-      include: {
-        class: {
-          include: { academicYear: true },
+    // Verify section exists and get its class + academic year (if provided)
+    let section: { id: string; classId: string; class: { branchId: string; academicYearId: string } } | null = null;
+    if (data.sectionId) {
+      section = await prisma.section.findFirst({
+        where: { id: data.sectionId },
+        include: {
+          class: {
+            include: { academicYear: true },
+          },
         },
-      },
-    });
-    if (!section || section.class.branchId !== data.branchId) {
-      return apiError("NOT_FOUND", "Section not found for this branch", 404);
+      });
+      if (!section || section.class.branchId !== data.branchId) {
+        return apiError("NOT_FOUND", "Section not found for this branch", 404);
+      }
     }
 
     // Auto-generate admissionNo
@@ -214,20 +264,115 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Create enrollment for current academic year
-      await tx.studentEnrollment.create({
-        data: {
-          studentId: created.id,
-          academicYearId: section.class.academicYearId,
-          sectionId: data.sectionId,
-        },
-      });
+      // Create enrollment for current academic year (if division was selected)
+      if (section && data.sectionId) {
+        await tx.studentEnrollment.create({
+          data: {
+            studentId: created.id,
+            academicYearId: section.class.academicYearId,
+            sectionId: data.sectionId,
+          },
+        });
+      }
+
+      // Create invoice + payment if fees exist for this class
+      if (data.classId) {
+        const feeStructures = await tx.feeStructure.findMany({
+          where: { classId: data.classId },
+          include: { feeCategory: { select: { name: true } } },
+        });
+
+        if (feeStructures.length > 0) {
+          // Compute annual amount per fee structure
+          const feeItems = feeStructures.map((fs) => {
+            const base = Number(fs.amount);
+            let annual: number;
+            switch (fs.frequency) {
+              case "MONTHLY":
+                annual = base * 12;
+                break;
+              case "QUARTERLY":
+                annual = base * 4;
+                break;
+              case "SEMI_ANNUAL":
+                annual = base * 2;
+                break;
+              default:
+                annual = base;
+            }
+            return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
+          });
+
+          const annualTotal = feeItems.reduce((s, f) => s + f.annual, 0);
+          const discountPct = data.discountPercent ?? 0;
+          const discountedTotal = annualTotal * (1 - discountPct / 100);
+
+          const amountPaid = Math.min(data.amountPaid ?? 0, discountedTotal);
+
+          // Validate amountPaid doesn't exceed discounted total
+          if ((data.amountPaid ?? 0) > discountedTotal) {
+            throw new Error("AMOUNT_EXCEEDS_TOTAL");
+          }
+
+          let status: "PENDING" | "PARTIAL" | "PAID" = "PENDING";
+          if (amountPaid > 0 && amountPaid >= discountedTotal) {
+            status = "PAID";
+          } else if (amountPaid > 0) {
+            status = "PARTIAL";
+          }
+
+          const invoiceNo = `INV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 30);
+
+          const invoice = await tx.invoice.create({
+            data: {
+              studentId: created.id,
+              number: invoiceNo,
+              year: new Date().getFullYear(),
+              totalAmount: discountedTotal,
+              paidAmount: amountPaid,
+              status,
+              dueDate,
+              items: {
+                create: feeItems.map((fi) => {
+                  const itemDiscounted = fi.annual * (1 - discountPct / 100);
+                  return {
+                    feeStructureId: fi.feeStructureId,
+                    amount: itemDiscounted,
+                    description: fi.name,
+                  };
+                }),
+              },
+            },
+          });
+
+          // Create fee payment record if amount was paid
+          const pm = data.paymentMethod;
+          if (amountPaid > 0 && pm) {
+            const receiptNo = `RCP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+            await tx.feePayment.create({
+              data: {
+                invoiceId: invoice.id,
+                studentId: created.id,
+                amount: amountPaid,
+                method: pm,
+                transactionId: data.transactionId || null,
+                receiptNo,
+              },
+            });
+          }
+        }
+      }
 
       return created;
     });
 
     return apiSuccess(student, undefined, 201);
   } catch (error) {
+    if (error instanceof Error && error.message === "AMOUNT_EXCEEDS_TOTAL") {
+      return apiError("VALIDATION_ERROR", "Amount paid cannot exceed the discounted total", 422);
+    }
     console.error("Create student error:", error);
     return apiError("INTERNAL_ERROR", "Failed to create student", 500);
   }

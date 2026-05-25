@@ -52,6 +52,10 @@ interface StudentData {
       class: { id: string; name: string };
     };
   }>;
+  classId?: string | null;
+  totalFees?: number;
+  totalFeesPaid?: number;
+  pendingFees?: number;
 }
 
 export default function EditStudentPage() {

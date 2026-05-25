@@ -86,7 +86,34 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     if (!student) return apiNotFound("Student");
 
-    return apiSuccess(student);
+    // Compute fee totals for this student
+    const invoiceAgg = await prisma.invoice.aggregate({
+      where: { studentId: student.id, status: { not: "CANCELLED" } },
+      _sum: { totalAmount: true, paidAmount: true },
+    });
+
+    const totalFees = Number(invoiceAgg._sum.totalAmount ?? 0);
+    const totalFeesPaid = Number(invoiceAgg._sum.paidAmount ?? 0);
+
+    // Derive classId from enrollment or invoice fee structures
+    let classId: string | null = student.enrollments?.[0]?.section?.class?.id ?? null;
+    if (!classId) {
+      const invoiceItem = await prisma.invoiceItem.findFirst({
+        where: { invoice: { studentId: student.id } },
+        select: { feeStructure: { select: { classId: true } } },
+      });
+      if (invoiceItem) {
+        classId = invoiceItem.feeStructure.classId;
+      }
+    }
+
+    return apiSuccess({
+      ...student,
+      classId,
+      totalFees,
+      totalFeesPaid,
+      pendingFees: totalFees - totalFeesPaid,
+    });
   } catch (error) {
     console.error("Get student error:", error);
     return apiError("INTERNAL_ERROR", "Failed to get student", 500);

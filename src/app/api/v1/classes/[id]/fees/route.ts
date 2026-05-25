@@ -32,6 +32,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     });
 
     const fees = feeStructures.map((fs) => ({
+      id: fs.id,
       name: fs.feeCategory.name,
       amount: Number(fs.amount),
       frequency: fs.frequency,
