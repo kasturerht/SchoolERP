@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
   const { page, limit, search } = parsePagination(url);
   const role = url.searchParams.get("role");
   const branchId = url.searchParams.get("branchId");
+  const status = url.searchParams.get("status");
 
   const where: Record<string, unknown> = {
     branch: { organizationId: ctx.organizationId },
@@ -36,6 +37,10 @@ export async function GET(req: NextRequest) {
 
   if (role) {
     where.role = role;
+  }
+
+  if (status) {
+    where.status = status;
   }
 
   if (search) {

@@ -1,21 +1,5 @@
 import { z } from "zod";
 
-export const FEE_FREQUENCIES = [
-  "ONE_TIME",
-  "MONTHLY",
-  "QUARTERLY",
-  "SEMI_ANNUAL",
-  "ANNUAL",
-] as const;
-
-export const FEE_FREQUENCY_LABELS: Record<string, string> = {
-  ONE_TIME: "One Time",
-  MONTHLY: "Monthly",
-  QUARTERLY: "Quarterly",
-  SEMI_ANNUAL: "Semi Annual",
-  ANNUAL: "Annual",
-};
-
 const sectionSchema = z.object({
   id: z.string().optional(),
   name: z
@@ -31,7 +15,6 @@ const inlineFeeSchema = z.object({
     .min(1, "Fee name is required")
     .max(100, "Fee name must be at most 100 characters"),
   amount: z.number().positive("Amount must be positive"),
-  frequency: z.enum(FEE_FREQUENCIES),
 });
 
 export const createClassSchema = z.object({
@@ -46,6 +29,8 @@ export const createClassSchema = z.object({
     .max(20, "Grade must be at most 20"),
   branchId: z.string().min(1, "Branch is required"),
   academicYearId: z.string().min(1, "Academic year is required"),
+  classTeacherId: z.string().nullable().optional(),
+  subjectTeacherIds: z.array(z.string()).default([]),
   sections: z
     .array(sectionSchema)
     .min(1, "At least one section is required"),
@@ -66,6 +51,8 @@ export const updateClassSchema = z.object({
     .optional(),
   branchId: z.string().optional(),
   academicYearId: z.string().optional(),
+  classTeacherId: z.string().nullable().optional(),
+  subjectTeacherIds: z.array(z.string()).optional(),
   sections: z.array(sectionSchema).optional(),
   fees: z.array(inlineFeeSchema).optional(),
 });

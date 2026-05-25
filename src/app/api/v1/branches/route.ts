@@ -25,17 +25,19 @@ export async function GET(req: NextRequest) {
   const paginated = url.searchParams.get("paginated") === "true";
 
   if (!paginated) {
-    // Lightweight response for dropdowns (original behaviour)
+    // Lightweight response for dropdowns (original Behavior)
     const branches = await prisma.branch.findMany({
       where: {
         organizationId: session.user.organizationId,
-        isActive: true,
       },
       select: {
         id: true,
         name: true,
         code: true,
+        phone: true,
+        email: true,
         isMain: true,
+        isActive: true,
       },
       orderBy: [{ isMain: "desc" }, { name: "asc" }],
     });

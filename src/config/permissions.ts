@@ -116,10 +116,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<
  */
 export const NAVIGATION_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: "dashboard", roles: "all" as const },
-  { label: "Students", href: "/students", icon: "school", permission: "students:read" },
+  { label: "Branches", href: "/branches", icon: "location_city", permission: "branches:manage" },
+  { label: "Users", href: "/users", icon: "group", permission: "users:read" },
   { label: "Staff", href: "/staff", icon: "badge", permission: "staff:read" },
-  { label: "Attendance", href: "/attendance/students", icon: "fact_check", permission: "attendance:read" },
+  { label: "Academic Years", href: "/academic-years", icon: "date_range", permission: "academic_years:read" },
+  { label: "Classes", href: "/classes", icon: "class", permission: "classes:read" },
+  { label: "Students", href: "/students", icon: "school", permission: "students:read" },
   { label: "Fees", href: "/fees", icon: "payments", permission: "fees:read" },
+  // { label: "Attendance", href: "/attendance/students", icon: "fact_check", permission: "attendance:read" },
   // { label: "Exams", href: "/exams", icon: "quiz", permission: "exams:read" },
   // { label: "Timetable", href: "/timetable", icon: "calendar_month", permission: "timetable:read" },
   // { label: "Transport", href: "/transport/routes", icon: "directions_bus", permission: "transport:read" },
@@ -128,9 +132,6 @@ export const NAVIGATION_ITEMS = [
   // { label: "Notices", href: "/communication/notices", icon: "campaign", permission: "notices:read" },
   // { label: "Events", href: "/communication/events", icon: "event", permission: "events:read" },
   // { label: "Reports", href: "/reports", icon: "analytics", permission: "reports:view" },
-  { label: "Classes", href: "/classes", icon: "class", permission: "classes:read" },
-  { label: "Academic Years", href: "/academic-years", icon: "date_range", permission: "academic_years:read" },
-  { label: "Branches", href: "/branches", icon: "location_city", permission: "branches:manage" },
-  { label: "Users", href: "/users", icon: "group", permission: "users:read" },
-  { label: "Settings", href: "/settings/general", icon: "settings", permission: "settings:manage" },
+  
+  // { label: "Settings", href: "/settings/general", icon: "settings", permission: "settings:manage" },
 ];

@@ -71,7 +71,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
   const { data: session } = useSession();
   const { branches, isLoading: branchesLoading } = useBranches();
 
-  const isBranchAdmin = session?.user?.role === "BRANCH_ADMIN";
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
 
   const [name, setName] = useState(initialData?.name ?? "");
   const [email, setEmail] = useState(initialData?.email ?? "");
@@ -84,12 +84,12 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
   const [branchId, setBranchId] = useState(initialData?.branch?.id ?? "");
   const [status, setStatus] = useState(initialData?.status ?? "ACTIVE");
 
-  // Auto-assign branch for BRANCH_ADMIN
+  // Auto-assign branch for non-SUPER_ADMIN users
   useEffect(() => {
-    if (isBranchAdmin && session?.user?.branchId && !branchId) {
+    if (!isSuperAdmin && session?.user?.branchId && !branchId) {
       setBranchId(session.user.branchId);
     }
-  }, [isBranchAdmin, session?.user?.branchId, branchId]);
+  }, [isSuperAdmin, session?.user?.branchId, branchId]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -305,7 +305,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
             fullWidth
           />
 
-          {!isBranchAdmin && (
+          {isSuperAdmin && (
             <div className="flex flex-col gap-1">
               <label className="text-label-md text-on-surface-variant px-1">
                 Branch *

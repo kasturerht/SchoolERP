@@ -34,6 +34,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
         },
         branch: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
+        classTeacher: { select: { id: true, name: true } },
+        subjectTeachers: {
+          include: { staff: { select: { id: true, name: true } } },
+        },
       },
     });
 
@@ -84,16 +88,30 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (!existing) return apiNotFound("Class");
 
-    const { name, numericGrade, sections, fees } = parsed.data;
+    const { name, numericGrade, sections, fees, classTeacherId, subjectTeacherIds } = parsed.data;
 
     await prisma.$transaction(async (tx) => {
       // Update basic class fields
       const data: Record<string, unknown> = {};
       if (name !== undefined) data.name = name;
       if (numericGrade !== undefined) data.numericGrade = numericGrade;
+      if (classTeacherId !== undefined) data.classTeacherId = classTeacherId || null;
 
       if (Object.keys(data).length > 0) {
         await tx.class.update({ where: { id }, data });
+      }
+
+      // Sync subject teachers
+      if (subjectTeacherIds !== undefined) {
+        await tx.classSubjectTeacher.deleteMany({ where: { classId: id } });
+        if (subjectTeacherIds.length > 0) {
+          await tx.classSubjectTeacher.createMany({
+            data: subjectTeacherIds.map((staffId) => ({
+              classId: id,
+              staffId,
+            })),
+          });
+        }
       }
 
       // Sync sections
@@ -174,7 +192,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
               data: {
                 feeCategoryId: feeCategory.id,
                 amount: fee.amount,
-                frequency: fee.frequency,
+                frequency: "ANNUAL",
               },
             });
           } else {
@@ -184,7 +202,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 academicYearId: existing.academicYearId,
                 feeCategoryId: feeCategory.id,
                 amount: fee.amount,
-                frequency: fee.frequency,
+                frequency: "ANNUAL",
               },
             });
           }
@@ -202,6 +220,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         },
         branch: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
+        classTeacher: { select: { id: true, name: true } },
+        subjectTeachers: {
+          include: { staff: { select: { id: true, name: true } } },
+        },
       },
     });
 

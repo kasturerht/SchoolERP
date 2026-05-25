@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import {
@@ -15,12 +16,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Divider } from "@/components/ui/divider";
 import { Icon } from "@/components/ui/icon";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { useBranches } from "@/hooks/use-branches";
+import { useTeachers } from "@/hooks/use-teachers";
 import {
   createClassSchema,
   updateClassSchema,
-  FEE_FREQUENCIES,
-  FEE_FREQUENCY_LABELS,
 } from "@/lib/validations/class";
 
 interface AcademicYearOption {
@@ -38,7 +39,6 @@ interface FeeRow {
   id?: string;
   name: string;
   amount: number | string;
-  frequency: string;
 }
 
 interface ClassData {
@@ -47,6 +47,9 @@ interface ClassData {
   numericGrade: number;
   branchId: string;
   academicYearId: string;
+  classTeacherId?: string | null;
+  classTeacher?: { id: string; name: string } | null;
+  subjectTeachers?: Array<{ staff: { id: string; name: string } }>;
   sections: Array<{ id: string; name: string }>;
   feeStructures: Array<{
     id: string;
@@ -63,26 +66,11 @@ interface ClassFormProps {
   initialData?: ClassData;
 }
 
-function computeAnnualAmount(amount: number, frequency: string): number {
-  switch (frequency) {
-    case "ONE_TIME":
-      return amount;
-    case "MONTHLY":
-      return amount * 12;
-    case "QUARTERLY":
-      return amount * 4;
-    case "SEMI_ANNUAL":
-      return amount * 2;
-    case "ANNUAL":
-      return amount;
-    default:
-      return amount;
-  }
-}
-
 export function ClassForm({ mode, initialData }: ClassFormProps) {
   const router = useRouter();
   const snackbar = useSnackbar();
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
   const { branches, isLoading: branchesLoading } = useBranches();
 
   const [name, setName] = useState(initialData?.name ?? "");
@@ -96,14 +84,28 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   const [sections, setSections] = useState<SectionRow[]>(
     initialData?.sections ?? [{ name: "A" }]
   );
+  const [classTeacherId, setClassTeacherId] = useState<string>(
+    initialData?.classTeacherId ?? ""
+  );
+  const [subjectTeacherIds, setSubjectTeacherIds] = useState<string[]>(
+    initialData?.subjectTeachers?.map((st) => st.staff.id) ?? []
+  );
   const [fees, setFees] = useState<FeeRow[]>(
     initialData?.feeStructures?.map((f) => ({
       id: f.id,
       name: f.feeCategory.name,
       amount: Number(f.amount),
-      frequency: f.frequency,
     })) ?? []
   );
+
+  const { teachers, isLoading: teachersLoading } = useTeachers(branchId);
+
+  // Auto-assign branch for non-SUPER_ADMIN users
+  useEffect(() => {
+    if (!isSuperAdmin && session?.user?.branchId && !branchId) {
+      setBranchId(session.user.branchId);
+    }
+  }, [isSuperAdmin, session?.user?.branchId, branchId]);
 
   const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
   const [academicYearsLoading, setAcademicYearsLoading] = useState(true);
@@ -151,7 +153,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   function addFee() {
     setFees((prev) => [
       ...prev,
-      { name: "", amount: "", frequency: "MONTHLY" },
+      { name: "", amount: "" },
     ]);
   }
 
@@ -168,7 +170,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   const annualTotal = fees.reduce((sum, f) => {
     const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
     if (isNaN(amt) || amt <= 0) return sum;
-    return sum + computeAnnualAmount(amt, f.frequency);
+    return sum + amt;
   }, 0);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -180,6 +182,8 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       numericGrade: numericGrade !== "" ? parseInt(numericGrade, 10) : undefined,
       branchId,
       academicYearId,
+      classTeacherId: classTeacherId || null,
+      subjectTeacherIds,
       sections: sections.map((s) => ({
         ...(s.id ? { id: s.id } : {}),
         name: s.name,
@@ -189,7 +193,6 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
         name: f.name,
         amount:
           typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
-        frequency: f.frequency,
       })),
     };
 
@@ -293,37 +296,39 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label className="text-label-md text-on-surface-variant px-1">
-                Branch *
-              </label>
-              <Select
-                value={branchId}
-                onValueChange={setBranchId}
-                disabled={mode === "edit"}
-              >
-                <SelectTrigger fullWidth>
-                  <SelectValue
-                    placeholder={
-                      branchesLoading ? "Loading..." : "Select branch"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.branchId && (
-                <p className="px-4 text-[12px] leading-4 text-error">
-                  {errors.branchId}
-                </p>
-              )}
-            </div>
+          <div className={`grid grid-cols-1 gap-4 ${isSuperAdmin ? "sm:grid-cols-2" : ""}`}>
+            {isSuperAdmin && (
+              <div className="flex flex-col gap-1">
+                <label className="text-label-md text-on-surface-variant px-1">
+                  Branch *
+                </label>
+                <Select
+                  value={branchId}
+                  onValueChange={setBranchId}
+                  disabled={mode === "edit"}
+                >
+                  <SelectTrigger fullWidth>
+                    <SelectValue
+                      placeholder={
+                        branchesLoading ? "Loading..." : "Select branch"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.branchId && (
+                  <p className="px-4 text-[12px] leading-4 text-error">
+                    {errors.branchId}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex flex-col gap-1">
               <label className="text-label-md text-on-surface-variant px-1">
                 Academic Year *
@@ -354,6 +359,72 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   {errors.academicYearId}
                 </p>
               )}
+            </div>
+          </div>
+
+          <Divider />
+
+          {/* Teacher Assignments */}
+          <div>
+            <p className="text-label-lg font-medium text-on-surface mb-3">
+              Teacher Assignments
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-label-md text-on-surface-variant px-1">
+                  Class Teacher
+                </label>
+                <Select
+                  value={classTeacherId || "__none__"}
+                  onValueChange={(val) =>
+                    setClassTeacherId(val === "__none__" ? "" : val)
+                  }
+                  disabled={!branchId}
+                >
+                  <SelectTrigger fullWidth>
+                    <SelectValue
+                      placeholder={
+                        teachersLoading
+                          ? "Loading..."
+                          : !branchId
+                            ? "Select branch first"
+                            : "Select class teacher"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {teachers.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-label-md text-on-surface-variant px-1">
+                  Subject Teachers
+                </label>
+                <MultiSelect
+                  options={teachers.map((t) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                  value={subjectTeacherIds}
+                  onChange={setSubjectTeacherIds}
+                  placeholder={
+                    teachersLoading
+                      ? "Loading..."
+                      : !branchId
+                        ? "Select branch first"
+                        : "Select subject teachers"
+                  }
+                  searchPlaceholder="Search teachers..."
+                  disabled={!branchId}
+                  fullWidth
+                />
+              </div>
             </div>
           </div>
 
@@ -437,11 +508,11 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       fullWidth
                     />
                   </div>
-                  <div className="w-32">
+                  <div className="w-40">
                     <TextField
                       label=""
                       type="number"
-                      placeholder="Amount"
+                      placeholder="Amount (Annual)"
                       value={fee.amount.toString()}
                       onChange={(e) =>
                         updateFee(index, "amount", e.target.value)
@@ -449,25 +520,6 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       error={errors[`fees.${index}.amount`]}
                       fullWidth
                     />
-                  </div>
-                  <div className="w-40">
-                    <Select
-                      value={fee.frequency}
-                      onValueChange={(v) =>
-                        updateFee(index, "frequency", v)
-                      }
-                    >
-                      <SelectTrigger fullWidth>
-                        <SelectValue placeholder="Frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FEE_FREQUENCIES.map((freq) => (
-                          <SelectItem key={freq} value={freq}>
-                            {FEE_FREQUENCY_LABELS[freq]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
                   <button
                     type="button"
@@ -487,7 +539,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
             {fees.length > 0 && (
               <div className="mt-4 text-right">
                 <p className="text-label-lg text-on-surface">
-                  Estimated Annual Total:{" "}
+                  Total:{" "}
                   <span className="font-semibold">
                     ₹{annualTotal.toLocaleString("en-IN")}
                   </span>

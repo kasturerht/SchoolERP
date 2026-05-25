@@ -37,12 +37,32 @@ export async function GET(req: NextRequest) {
         include: {
           branch: { select: { id: true, name: true } },
           academicYear: { select: { id: true, name: true } },
-          _count: { select: { sections: true, feeStructures: true } },
+          classTeacher: { select: { id: true, name: true } },
+          feeStructures: {
+            select: {
+              amount: true,
+              feeCategory: { select: { name: true } },
+            },
+          },
+          sections: {
+            select: {
+              _count: { select: { studentEnrollments: true } },
+            },
+          },
+          _count: { select: { sections: true, subjectTeachers: true } },
         },
         orderBy: [{ numericGrade: "asc" }, { name: "asc" }],
       });
 
-      return apiSuccess(classes);
+      const result = classes.map(({ sections: secs, ...rest }) => ({
+        ...rest,
+        totalStudents: secs.reduce(
+          (sum, s) => sum + s._count.studentEnrollments,
+          0
+        ),
+      }));
+
+      return apiSuccess(result);
     } catch (error) {
       console.error("List classes (paginated) error:", error);
       return apiError("INTERNAL_ERROR", "Failed to list classes", 500);
@@ -118,7 +138,7 @@ export async function POST(req: NextRequest) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, numericGrade, branchId, academicYearId, sections, fees } =
+  const { name, numericGrade, branchId, academicYearId, sections, fees, classTeacherId, subjectTeacherIds } =
     parsed.data;
 
   try {
@@ -158,8 +178,19 @@ export async function POST(req: NextRequest) {
           academicYearId,
           name,
           numericGrade,
+          classTeacherId: classTeacherId || null,
         },
       });
+
+      // Create subject teacher assignments
+      if (subjectTeacherIds.length > 0) {
+        await tx.classSubjectTeacher.createMany({
+          data: subjectTeacherIds.map((staffId) => ({
+            classId: cls.id,
+            staffId,
+          })),
+        });
+      }
 
       // Create sections
       await tx.section.createMany({
@@ -192,7 +223,7 @@ export async function POST(req: NextRequest) {
             academicYearId,
             feeCategoryId: feeCategory.id,
             amount: fee.amount,
-            frequency: fee.frequency,
+            frequency: "ANNUAL",
           },
         });
       }
@@ -210,6 +241,10 @@ export async function POST(req: NextRequest) {
         },
         branch: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
+        classTeacher: { select: { id: true, name: true } },
+        subjectTeachers: {
+          include: { staff: { select: { id: true, name: true } } },
+        },
       },
     });
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { SearchBar } from "@/components/ui/search-bar";
 import {
   Select,
@@ -14,10 +15,20 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useBranches } from "@/hooks/use-branches";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { FAB } from "@/components/ui/fab";
+import { useSnackbar } from "@/components/ui/snackbar";
 import { Menu, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 
 const ROLE_OPTIONS = [
@@ -78,10 +89,15 @@ function StaffAvatar({ name }: { name: string }) {
 
 export default function StaffPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const snackbar = useSnackbar();
+  const { can } = usePermissions();
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
   const { branches } = useBranches();
 
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [terminating, setTerminating] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [branchFilter, setBranchFilter] = useState("ALL");
@@ -110,6 +126,24 @@ export default function StaffPage() {
     fetchStaff();
   }, [fetchStaff]);
 
+  async function handleTerminate(id: string) {
+    setTerminating(true);
+    try {
+      const res = await fetch(`/api/v1/staff/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Staff member terminated");
+        fetchStaff();
+      } else {
+        snackbar.show(data.error?.message ?? "Failed to terminate staff member");
+      }
+    } catch {
+      snackbar.show("An error occurred");
+    } finally {
+      setTerminating(false);
+    }
+  }
+
   const columns: Column<StaffRow>[] = [
     {
       key: "name",
@@ -120,6 +154,16 @@ export default function StaffPage() {
           <span className="font-medium">{row.name}</span>
         </div>
       ),
+    },
+    {
+      key: "email",
+      header: "Email",
+      render: (row) => row.email ?? "—",
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      render: (row) => row.phone ?? "—",
     },
     {
       key: "role",
@@ -165,28 +209,61 @@ export default function StaffPage() {
       key: "actions",
       header: "",
       render: (row) => (
-        <Menu>
-          <MenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-full p-1 hover:bg-on-surface/8 cursor-pointer"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Icon name="more_vert" size={20} className="text-on-surface-variant" />
-            </button>
-          </MenuTrigger>
-          <MenuContent>
-            <MenuItem
-              icon="edit"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/staff/${row.id}/edit`);
-              }}
-            >
-              Edit
-            </MenuItem>
-          </MenuContent>
-        </Menu>
+        <Dialog>
+          <Menu>
+            <MenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded-full p-1 hover:bg-on-surface/8 cursor-pointer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Icon name="more_vert" size={20} className="text-on-surface-variant" />
+              </button>
+            </MenuTrigger>
+            <MenuContent>
+              <MenuItem
+                icon="edit"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/staff/${row.id}/edit`);
+                }}
+              >
+                Edit
+              </MenuItem>
+              {can("staff", "delete") && row.status !== "TERMINATED" && (
+                <DialogTrigger asChild>
+                  <MenuItem
+                    icon="person_off"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-error"
+                  >
+                    Terminate
+                  </MenuItem>
+                </DialogTrigger>
+              )}
+            </MenuContent>
+          </Menu>
+          <DialogContent>
+            <DialogTitle>Terminate staff member?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to terminate &ldquo;{row.name}&rdquo;?
+              This will mark them as terminated.
+            </DialogDescription>
+            <div className="mt-6 flex justify-end gap-3">
+              <DialogClose asChild>
+                <Button variant="text">Cancel</Button>
+              </DialogClose>
+              <Button
+                variant="filled"
+                onClick={() => handleTerminate(row.id)}
+                loading={terminating}
+                className="bg-error text-on-error"
+              >
+                Terminate
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       ),
       className: "w-12",
     },
@@ -227,7 +304,7 @@ export default function StaffPage() {
                 ))}
               </SelectContent>
             </Select>
-            {branches.length > 1 && (
+            {isSuperAdmin && branches.length > 1 && (
               <Select
                 value={branchFilter}
                 onValueChange={setBranchFilter}

@@ -179,22 +179,26 @@ model AcademicYear {
 }
 
 model Class {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   branchId       String
   academicYearId String
+  classTeacherId String?
   name           String
   numericGrade   Int
   createdAt      DateTime @default(now())
 
   branch       Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
   academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classTeacher Staff?       @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
 
-  sections      Section[]
-  subjects      Subject[]
-  feeStructures FeeStructure[]
+  sections        Section[]
+  subjects        Subject[]
+  feeStructures   FeeStructure[]
+  subjectTeachers ClassSubjectTeacher[]
 
   @@unique([branchId, academicYearId, name])
   @@index([branchId])
+  @@index([classTeacherId])
   @@map("classes")
 }
 
@@ -373,9 +377,11 @@ model Staff {
   user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
   branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
-  subjectAssignments TeacherSubjectAssignment[]
-  staffAttendances   StaffAttendance[]
-  documents          StaffDocument[]
+  subjectAssignments  TeacherSubjectAssignment[]
+  staffAttendances    StaffAttendance[]
+  documents           StaffDocument[]
+  classTeacherOf      Class[]                @relation("ClassTeacher")
+  subjectTeacherClasses ClassSubjectTeacher[] @relation("ClassSubjectTeacher")
 
   @@unique([branchId, employeeId])
   @@index([branchId])
@@ -415,6 +421,20 @@ model TeacherSubjectAssignment {
 
   @@unique([staffId, subjectId])
   @@map("teacher_subject_assignments")
+}
+
+model ClassSubjectTeacher {
+  id      String @id @default(cuid())
+  classId String
+  staffId String
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  staff Staff @relation("ClassSubjectTeacher", fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, staffId])
+  @@index([classId])
+  @@index([staffId])
+  @@map("class_subject_teachers")
 }
 
 // ======================== ATTENDANCE ========================
