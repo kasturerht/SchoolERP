@@ -1,11 +1,18 @@
 import { z } from "zod";
 
+const sectionSubjectTeacherSchema = z.object({
+  subjectIndex: z.number().int().min(0),
+  staffId: z.string().min(1, "Teacher is required"),
+});
+
 const sectionSchema = z.object({
   id: z.string().optional(),
   name: z
     .string()
-    .min(1, "Section name is required")
-    .max(20, "Section name must be at most 20 characters"),
+    .min(1, "Division name is required")
+    .max(20, "Division name must be at most 20 characters"),
+  classTeacherId: z.string().nullable().optional(),
+  subjectTeachers: z.array(sectionSubjectTeacherSchema).default([]),
 });
 
 const inlineFeeSchema = z.object({
@@ -29,13 +36,18 @@ export const createClassSchema = z.object({
     .max(20, "Grade must be at most 20"),
   branchId: z.string().min(1, "Branch is required"),
   academicYearId: z.string().min(1, "Academic year is required"),
-  classTeacherId: z.string().nullable().optional(),
-  subjectTeacherIds: z.array(z.string()).default([]),
+  subjectMasterIds: z.array(z.string()).default([]),
   sections: z
     .array(sectionSchema)
-    .min(1, "At least one section is required"),
+    .min(1, "At least one division is required"),
   fees: z.array(inlineFeeSchema).default([]),
 });
+
+// For update, subjects are expressed as an array of { id } (keep) or { subjectMasterId } (add new)
+const updateSubjectEntry = z.union([
+  z.object({ id: z.string() }),
+  z.object({ subjectMasterId: z.string() }),
+]);
 
 export const updateClassSchema = z.object({
   name: z
@@ -51,8 +63,7 @@ export const updateClassSchema = z.object({
     .optional(),
   branchId: z.string().optional(),
   academicYearId: z.string().optional(),
-  classTeacherId: z.string().nullable().optional(),
-  subjectTeacherIds: z.array(z.string()).optional(),
+  subjects: z.array(updateSubjectEntry).optional(),
   sections: z.array(sectionSchema).optional(),
   fees: z.array(inlineFeeSchema).optional(),
 });

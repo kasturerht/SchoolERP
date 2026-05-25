@@ -35,16 +35,25 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { useBranches } from "@/hooks/use-branches";
 
+interface SectionSummary {
+  id: string;
+  name: string;
+  classTeacher?: { id: string; name: string } | null;
+}
+
 interface ClassRow {
   id: string;
   name: string;
   numericGrade: number;
   branch: { id: string; name: string };
   academicYear: { id: string; name: string };
-  classTeacher?: { id: string; name: string } | null;
+  sections: SectionSummary[];
   totalStudents: number;
-  feeStructures: Array<{ amount: number | string; feeCategory: { name: string } }>;
-  _count: { sections: number; subjectTeachers: number };
+  feeStructures: Array<{
+    amount: number | string;
+    feeCategory: { name: string };
+  }>;
+  _count: { sections: number; subjects: number };
 }
 
 export default function ClassesPage() {
@@ -65,7 +74,8 @@ export default function ClassesPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ paginated: "true" });
-      if (branchFilter && branchFilter !== "__all__") params.set("branchId", branchFilter);
+      if (branchFilter && branchFilter !== "__all__")
+        params.set("branchId", branchFilter);
 
       const res = await fetch(`/api/v1/classes?${params}`);
       const data = await res.json();
@@ -103,9 +113,7 @@ export default function ClassesPage() {
     {
       key: "name",
       header: "Name",
-      render: (row) => (
-        <span className="font-medium">{row.name}</span>
-      ),
+      render: (row) => <span className="font-medium">{row.name}</span>,
     },
     {
       key: "numericGrade",
@@ -123,14 +131,25 @@ export default function ClassesPage() {
       render: (row) => row.academicYear.name,
     },
     {
-      key: "classTeacher",
-      header: "Class Teacher",
-      render: (row) => row.classTeacher?.name ?? "—",
+      key: "subjects",
+      header: "Subjects",
+      render: (row) => row._count.subjects,
     },
     {
-      key: "sections",
-      header: "Sections",
-      render: (row) => row._count.sections,
+      key: "divisions",
+      header: "Divisions",
+      render: (row) => {
+        const summary = row.sections
+          .map(
+            (s) => `${s.name}${s.classTeacher ? ` (${s.classTeacher.name})` : ""}`
+          )
+          .join(", ");
+        return (
+          <span title={summary}>
+            {row._count.sections}
+          </span>
+        );
+      },
     },
     {
       key: "students",
@@ -190,8 +209,8 @@ export default function ClassesPage() {
             <DialogTitle>Delete class?</DialogTitle>
             <DialogDescription>
               This will permanently delete the class &ldquo;{row.name}&rdquo;
-              along with its sections and fee structures. If students are enrolled,
-              deletion will be refused.
+              along with its divisions, subjects, and fee structures. If
+              students are enrolled, deletion will be refused.
             </DialogDescription>
             <div className="mt-6 flex justify-end gap-3">
               <DialogClose asChild>

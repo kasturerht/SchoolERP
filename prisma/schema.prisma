@@ -23,11 +23,12 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches      Branch[]
-  users         User[]
-  academicYears AcademicYear[]
-  feeCategories FeeCategory[]
-  notices       Notice[]
+  branches       Branch[]
+  users          User[]
+  academicYears  AcademicYear[]
+  feeCategories  FeeCategory[]
+  notices        Notice[]
+  subjectMasters SubjectMaster[]
 
   @@map("organizations")
 }
@@ -182,55 +183,59 @@ model Class {
   id             String  @id @default(cuid())
   branchId       String
   academicYearId String
-  classTeacherId String?
   name           String
   numericGrade   Int
   createdAt      DateTime @default(now())
 
   branch       Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
   academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  classTeacher Staff?       @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
 
-  sections        Section[]
-  subjects        Subject[]
-  feeStructures   FeeStructure[]
-  subjectTeachers ClassSubjectTeacher[]
+  sections      Section[]
+  subjects      Subject[]
+  feeStructures FeeStructure[]
 
   @@unique([branchId, academicYearId, name])
   @@index([branchId])
-  @@index([classTeacherId])
   @@map("classes")
 }
 
 model Section {
-  id      String @id @default(cuid())
-  classId String
-  name    String
+  id             String  @id @default(cuid())
+  classId        String
+  name           String
+  classTeacherId String?
 
-  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class        Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classTeacher Staff? @relation("SectionClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
 
-  studentEnrollments StudentEnrollment[]
-  timetableSlots     TimetableSlot[]
-  studentAttendances StudentAttendance[]
+  studentEnrollments     StudentEnrollment[]
+  timetableSlots         TimetableSlot[]
+  studentAttendances     StudentAttendance[]
+  sectionSubjectTeachers SectionSubjectTeacher[]
 
   @@unique([classId, name])
+  @@index([classTeacherId])
   @@map("sections")
 }
 
 model Subject {
-  id      String      @id @default(cuid())
-  classId String
-  name    String
-  code    String
-  type    SubjectType @default(THEORY)
+  id              String      @id @default(cuid())
+  classId         String
+  subjectMasterId String?
+  name            String
+  code            String
+  type            SubjectType @default(THEORY)
 
-  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class         Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectMaster SubjectMaster? @relation(fields: [subjectMasterId], references: [id], onDelete: SetNull)
 
-  teacherAssignments TeacherSubjectAssignment[]
-  timetableSlots     TimetableSlot[]
-  examSubjects       ExamSubject[]
+  teacherAssignments     TeacherSubjectAssignment[]
+  timetableSlots         TimetableSlot[]
+  examSubjects           ExamSubject[]
+  sectionSubjectTeachers SectionSubjectTeacher[]
 
   @@unique([classId, code])
+  @@index([subjectMasterId])
   @@map("subjects")
 }
 
@@ -377,11 +382,11 @@ model Staff {
   user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
   branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
-  subjectAssignments  TeacherSubjectAssignment[]
-  staffAttendances    StaffAttendance[]
-  documents           StaffDocument[]
-  classTeacherOf      Class[]                @relation("ClassTeacher")
-  subjectTeacherClasses ClassSubjectTeacher[] @relation("ClassSubjectTeacher")
+  subjectAssignments       TeacherSubjectAssignment[]
+  staffAttendances         StaffAttendance[]
+  documents                StaffDocument[]
+  sectionClassTeacherOf    Section[]              @relation("SectionClassTeacher")
+  sectionSubjectTeachings  SectionSubjectTeacher[] @relation("SectionSubjectTeacher")
 
   @@unique([branchId, employeeId])
   @@index([branchId])
@@ -423,18 +428,39 @@ model TeacherSubjectAssignment {
   @@map("teacher_subject_assignments")
 }
 
-model ClassSubjectTeacher {
-  id      String @id @default(cuid())
-  classId String
-  staffId String
+model SubjectMaster {
+  id             String      @id @default(cuid())
+  organizationId String
+  name           String
+  code           String
+  type           SubjectType @default(THEORY)
+  description    String?
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
-  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
-  staff Staff @relation("ClassSubjectTeacher", fields: [staffId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subjects     Subject[]
 
-  @@unique([classId, staffId])
-  @@index([classId])
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("subject_masters")
+}
+
+model SectionSubjectTeacher {
+  id        String @id @default(cuid())
+  sectionId String
+  subjectId String
+  staffId   String
+
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  staff   Staff   @relation("SectionSubjectTeacher", fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([sectionId, subjectId])
+  @@index([sectionId])
   @@index([staffId])
-  @@map("class_subject_teachers")
+  @@map("section_subject_teachers")
 }
 
 // ======================== ATTENDANCE ========================

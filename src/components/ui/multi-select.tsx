@@ -20,6 +20,7 @@ interface MultiSelectProps {
   disabled?: boolean;
   fullWidth?: boolean;
   className?: string;
+  labelFormatter?: (count: number) => string;
 }
 
 export function MultiSelect({
@@ -31,6 +32,7 @@ export function MultiSelect({
   disabled = false,
   fullWidth = false,
   className,
+  labelFormatter = (n) => `${n} selected`,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -69,7 +71,7 @@ export function MultiSelect({
         >
           <span className="truncate">
             {selectedCount > 0
-              ? `${selectedCount} teacher${selectedCount !== 1 ? "s" : ""} selected`
+              ? labelFormatter(selectedCount)
               : placeholder}
           </span>
           <Icon

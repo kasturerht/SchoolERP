@@ -18,7 +18,6 @@ export async function GET(req: NextRequest) {
   const paginated = url.searchParams.get("paginated") === "true";
 
   if (paginated) {
-    // Paginated mode for the classes list page
     const denied = await checkApiPermission(req, "classes", "read");
     if (denied) return denied;
 
@@ -37,7 +36,6 @@ export async function GET(req: NextRequest) {
         include: {
           branch: { select: { id: true, name: true } },
           academicYear: { select: { id: true, name: true } },
-          classTeacher: { select: { id: true, name: true } },
           feeStructures: {
             select: {
               amount: true,
@@ -46,16 +44,25 @@ export async function GET(req: NextRequest) {
           },
           sections: {
             select: {
+              id: true,
+              name: true,
+              classTeacher: { select: { id: true, name: true } },
               _count: { select: { studentEnrollments: true } },
             },
+            orderBy: { name: "asc" },
           },
-          _count: { select: { sections: true, subjectTeachers: true } },
+          _count: { select: { sections: true, subjects: true } },
         },
         orderBy: [{ numericGrade: "asc" }, { name: "asc" }],
       });
 
       const result = classes.map(({ sections: secs, ...rest }) => ({
         ...rest,
+        sections: secs.map((s) => ({
+          id: s.id,
+          name: s.name,
+          classTeacher: s.classTeacher,
+        })),
         totalStudents: secs.reduce(
           (sum, s) => sum + s._count.studentEnrollments,
           0
@@ -118,7 +125,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/v1/classes — create a new class with sections and fees
+ * POST /api/v1/classes — create a new class with subjects, sections, and fees
  */
 export async function POST(req: NextRequest) {
   const denied = await checkApiPermission(req, "classes", "create");
@@ -138,7 +145,7 @@ export async function POST(req: NextRequest) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, numericGrade, branchId, academicYearId, sections, fees, classTeacherId, subjectTeacherIds } =
+  const { name, numericGrade, branchId, academicYearId, sections, fees, subjectMasterIds } =
     parsed.data;
 
   try {
@@ -178,31 +185,62 @@ export async function POST(req: NextRequest) {
           academicYearId,
           name,
           numericGrade,
-          classTeacherId: classTeacherId || null,
         },
       });
 
-      // Create subject teacher assignments
-      if (subjectTeacherIds.length > 0) {
-        await tx.classSubjectTeacher.createMany({
-          data: subjectTeacherIds.map((staffId) => ({
-            classId: cls.id,
-            staffId,
-          })),
+      // Create subjects from subject master catalog
+      const createdSubjectIds: string[] = [];
+      if (subjectMasterIds.length > 0) {
+        const masters = await tx.subjectMaster.findMany({
+          where: {
+            id: { in: subjectMasterIds },
+            organizationId: ctx.organizationId,
+          },
         });
+
+        for (const masterId of subjectMasterIds) {
+          const master = masters.find((m) => m.id === masterId);
+          if (!master) continue;
+
+          const subject = await tx.subject.create({
+            data: {
+              classId: cls.id,
+              subjectMasterId: master.id,
+              name: master.name,
+              code: master.code,
+              type: master.type,
+            },
+          });
+          createdSubjectIds.push(subject.id);
+        }
       }
 
-      // Create sections
-      await tx.section.createMany({
-        data: sections.map((s) => ({
-          classId: cls.id,
-          name: s.name,
-        })),
-      });
+      // Create sections with class teacher and subject-teacher assignments
+      for (const sec of sections) {
+        const section = await tx.section.create({
+          data: {
+            classId: cls.id,
+            name: sec.name,
+            classTeacherId: sec.classTeacherId || null,
+          },
+        });
+
+        // Create section-subject-teacher records
+        for (const st of sec.subjectTeachers) {
+          if (st.subjectIndex >= 0 && st.subjectIndex < createdSubjectIds.length) {
+            await tx.sectionSubjectTeacher.create({
+              data: {
+                sectionId: section.id,
+                subjectId: createdSubjectIds[st.subjectIndex],
+                staffId: st.staffId,
+              },
+            });
+          }
+        }
+      }
 
       // Create fees
       for (const fee of fees) {
-        // Upsert fee category by org + name
         const feeCategory = await tx.feeCategory.upsert({
           where: {
             organizationId_name: {
@@ -235,16 +273,24 @@ export async function POST(req: NextRequest) {
     const full = await prisma.class.findUnique({
       where: { id: classRecord.id },
       include: {
-        sections: { orderBy: { name: "asc" } },
+        subjects: { orderBy: { name: "asc" } },
+        sections: {
+          orderBy: { name: "asc" },
+          include: {
+            classTeacher: { select: { id: true, name: true } },
+            sectionSubjectTeachers: {
+              include: {
+                subject: { select: { id: true, name: true, code: true } },
+                staff: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         feeStructures: {
           include: { feeCategory: { select: { name: true } } },
         },
         branch: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
-        classTeacher: { select: { id: true, name: true } },
-        subjectTeachers: {
-          include: { staff: { select: { id: true, name: true } } },
-        },
       },
     });
 

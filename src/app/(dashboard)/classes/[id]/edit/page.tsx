@@ -13,10 +13,23 @@ interface ClassData {
   numericGrade: number;
   branchId: string;
   academicYearId: string;
-  classTeacherId?: string | null;
-  classTeacher?: { id: string; name: string } | null;
-  subjectTeachers?: Array<{ staff: { id: string; name: string } }>;
-  sections: Array<{ id: string; name: string }>;
+  subjects: Array<{
+    id: string;
+    name: string;
+    code: string;
+    type: string;
+    subjectMasterId?: string | null;
+  }>;
+  sections: Array<{
+    id: string;
+    name: string;
+    classTeacher?: { id: string; name: string } | null;
+    classTeacherId?: string | null;
+    sectionSubjectTeachers: Array<{
+      subject: { id: string; name: string; code: string };
+      staff: { id: string; name: string };
+    }>;
+  }>;
   feeStructures: Array<{
     id: string;
     amount: number | string;
