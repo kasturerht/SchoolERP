@@ -116,9 +116,10 @@ export default function StudentsPage() {
     {
       key: "name",
       header: "Name",
+      minWidth: 200,
       sortValue: (row) => `${row.firstName} ${row.lastName}`,
       render: (row) => (
-        <div className="flex items-center gap-3">
+        <div className="flex gap-3">
           <StudentAvatar firstName={row.firstName} lastName={row.lastName} />
           <div>
             <span className="font-medium">

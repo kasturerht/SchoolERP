@@ -149,7 +149,7 @@ export default function StaffPage() {
       key: "name",
       header: "Name",
       render: (row) => (
-        <div className="flex items-center gap-3">
+        <div className="flex gap-3">
           <StaffAvatar name={row.name} />
           <span className="font-medium">{row.name}</span>
         </div>

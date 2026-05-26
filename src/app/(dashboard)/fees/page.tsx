@@ -105,7 +105,7 @@ export default function FeesPage() {
       header: "Student",
       sortValue: (row) => row.studentName,
       render: (row) => (
-        <div className="flex items-center gap-3">
+        <div className="flex gap-3">
           <StudentAvatar firstName={row.firstName} lastName={row.lastName} />
           <div>
             <span className="font-medium">{row.studentName}</span>
