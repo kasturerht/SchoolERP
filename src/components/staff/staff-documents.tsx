@@ -13,6 +13,7 @@ import { Chip } from "@/components/ui/chip";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { DOCUMENT_LABEL_OPTIONS } from "@/lib/validations/staff-document";
+import { getUploadUrl } from "@/lib/upload-url";
 
 interface StaffDocument {
   id: string;
@@ -203,7 +204,7 @@ export function StaffDocuments({ staffId }: StaffDocumentsProps) {
               <div className="relative aspect-[4/3] bg-surface-container">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={`/${doc.filePath}`}
+                  src={getUploadUrl(doc.filePath)}
                   alt={doc.label}
                   className="h-full w-full object-contain"
                 />
