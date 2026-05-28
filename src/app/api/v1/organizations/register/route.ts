@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       });
 
       return { organization, branch, user };
-    });
+    }, { timeout: 15000 });
 
     return apiSuccess(
       {

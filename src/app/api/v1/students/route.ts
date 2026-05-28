@@ -368,7 +368,7 @@ export async function POST(req: NextRequest) {
       }
 
       return created;
-    });
+    }, { timeout: 30000 });
 
     return apiSuccess(student, undefined, 201);
   } catch (error) {
