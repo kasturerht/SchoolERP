@@ -132,13 +132,13 @@ export default function StaffPage() {
       const res = await fetch(`/api/v1/staff/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Staff member terminated");
+        snackbar.show("Staff member terminated", "success");
         fetchStaff();
       } else {
-        snackbar.show(data.error?.message ?? "Failed to terminate staff member");
+        snackbar.show(data.error?.message ?? "Failed to terminate staff member", "error");
       }
     } catch {
-      snackbar.show("An error occurred");
+      snackbar.show("An error occurred", "error");
     } finally {
       setTerminating(false);
     }
@@ -149,7 +149,7 @@ export default function StaffPage() {
       key: "name",
       header: "Name",
       render: (row) => (
-        <div className="flex items-center gap-3">
+        <div className="flex gap-3">
           <StaffAvatar name={row.name} />
           <span className="font-medium">{row.name}</span>
         </div>

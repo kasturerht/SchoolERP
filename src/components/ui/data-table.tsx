@@ -20,6 +20,7 @@ export interface Column<T> {
   render: (row: T) => React.ReactNode;
   sortValue?: (row: T) => string | number | null;
   className?: string;
+  minWidth?: number;
 }
 
 interface DataTableProps<T> {
@@ -45,6 +46,7 @@ const AG_GRID_THEME_OVERRIDES: React.CSSProperties = {
   "--ag-font-family": "var(--font-sans)",
   "--ag-font-size": "14px",
   "--ag-border-radius": "0",
+  "--ag-line-height": "normal",
 } as React.CSSProperties;
 
 export function DataTable<T>({
@@ -73,6 +75,7 @@ export function DataTable<T>({
         filter: col.key !== "actions",
         suppressHeaderMenuButton: col.key === "actions",
         maxWidth: col.className?.includes("w-12") ? 64 : undefined,
+        minWidth: col.className?.includes("w-12") ? 56 : (col.minWidth ?? 120),
         flex: col.className?.includes("w-12") ? 0 : 1,
       })),
     [columns]
@@ -121,7 +124,7 @@ export function DataTable<T>({
 
   return (
     <div
-      className="ag-theme-quartz"
+      className="ag-theme-quartz overflow-auto"
       style={AG_GRID_THEME_OVERRIDES}
     >
       <AgGridReact<T>
@@ -133,6 +136,8 @@ export function DataTable<T>({
         onRowClicked={handleRowClicked}
         onGridReady={onGridReady}
         domLayout="autoHeight"
+        rowHeight={45}
+        headerHeight={44}
         pagination={true}
         paginationPageSize={paginationPageSize}
         paginationPageSizeSelector={false}
