@@ -44,6 +44,7 @@ export function RoleListClient() {
       badgeConfig: {
         label: (row) => row.isSystem ? "System" : "Custom",
         color: (row) => row.isSystem ? "primary" : "default",
+        icon: (row) => row.isSystem ? "cpu" : "sparkles",
       },
     },
     {

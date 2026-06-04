@@ -39,6 +39,7 @@ export interface Column<T> {
   badgeConfig?: {
     color: (row: T) => "default" | "primary" | "success" | "error" | "warning";
     label: (row: T) => string;
+    icon?: (row: T) => string;
   };
   statusDotConfig?: {
     color: (row: T) => "success" | "warning" | "error" | "default";
@@ -138,7 +139,8 @@ export function DataTable<T>({
         if (!config) return "—";
         const color = config.color(row);
         const label = config.label(row);
-        return <Chip label={label} color={color} />;
+        const icon = config.icon ? config.icon(row) : undefined;
+        return <Chip label={label} color={color} icon={icon} />;
       }
       case "status-dot": {
         const config = col.statusDotConfig;

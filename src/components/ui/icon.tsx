@@ -49,7 +49,9 @@ import {
   Upload,
   UserX,
   Receipt,
-  ClipboardSignature
+  ClipboardSignature,
+  Cpu,
+  Sparkles
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -117,6 +119,8 @@ const iconMap: Record<string, LucideIcon> = {
   visibility: Eye,
   visibility_off: EyeOff,
   app_registration: ClipboardSignature,
+  cpu: Cpu,
+  sparkles: Sparkles,
 };
 
 export function Icon({
