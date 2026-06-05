@@ -62,8 +62,12 @@ interface Application {
   examResult?: ExamResult | null;
   fatherName: string | null;
   fatherPhone: string | null;
+  fatherEmail: string | null;
+  fatherOccupation: string | null;
   motherName: string | null;
   motherPhone: string | null;
+  motherEmail: string | null;
+  motherOccupation: string | null;
   address: string;
   pincode: string;
   verificationNotes: string | null;
@@ -84,10 +88,10 @@ export default function AdmissionsPage() {
   const { data: session } = useSession();
   const snackbar = useSnackbar();
 
-  // Scope flags
+  // Roles & Permissions check
   const isSuperAdmin = session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN";
 
-  // Data states
+  // State configurations
   const [branches, setBranches] = useState<Branch[]>([]);
   const [activeBranch, setActiveBranch] = useState<Branch | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -100,26 +104,23 @@ export default function AdmissionsPage() {
   const [branchFilter, setBranchFilter] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"pipeline" | "inquiries">("pipeline");
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("list"); // List view is default for simplified real world usability!
+  const [activeTab, setActiveTab] = useState<"applications" | "inquiries">("applications");
+  const [includeArchives, setIncludeArchives] = useState<boolean>(false); // Hides Admitted/Rejected by default
 
   // Loading states
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Dialog open states
+  // Dialog & Workspace controllers
   const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
   const [applicationModalOpen, setApplicationModalOpen] = useState(false);
-  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
-  const [examModalOpen, setExamModalOpen] = useState(false);
-  const [promoteModalOpen, setPromoteModalOpen] = useState(false);
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
 
-  // Selected item states
+  // Selection configurations
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [classSections, setClassSections] = useState<Section[]>([]);
 
-  // Form states
+  // Stepper Wizards Form States
   const [inquiryForm, setInquiryForm] = useState({
     studentName: "",
     dateOfBirth: "",
@@ -181,9 +182,6 @@ export default function AdmissionsPage() {
     transactionId: "",
   });
 
-  // Drag over state for columns
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
-
   // 1. Fetch initial branches and academic years
   useEffect(() => {
     async function loadInitialData() {
@@ -197,7 +195,6 @@ export default function AdmissionsPage() {
 
         if (dataBranches.success) {
           setBranches(dataBranches.data);
-          // Set default active branch
           const defaultBranch =
             dataBranches.data.find((b: Branch) => b.id === session?.user?.branchId) ||
             dataBranches.data[0];
@@ -215,7 +212,7 @@ export default function AdmissionsPage() {
         }
       } catch (err) {
         console.error(err);
-        snackbar.show("Failed to load initial configuration.", "error");
+        snackbar.show("Failed to load configuration details.", "error");
       }
     }
     if (session) {
@@ -238,19 +235,17 @@ export default function AdmissionsPage() {
       }
     }
     loadClasses();
-    // Update active branch config
     const match = branches.find((b) => b.id === branchFilter);
     if (match) {
       setActiveBranch(match);
     }
   }, [branchFilter, branches]);
 
-  // 3. Fetch applications and inquiries (flicker-free baseline query)
+  // 3. Fetch applications and inquiries (Flicker-free baseline query)
   const fetchDashboardData = useCallback(async () => {
     if (!branchFilter) return;
     setLoading(true);
     try {
-      // Fetch full set for the branch, then filter locally for instant keystroke reactions
       const appUrl = `/api/v1/admissions/applications?branchId=${branchFilter}&limit=1000`;
       const inqUrl = `/api/v1/admissions/inquiries?branchId=${branchFilter}&limit=1000`;
 
@@ -266,7 +261,7 @@ export default function AdmissionsPage() {
       }
     } catch (err) {
       console.error(err);
-      snackbar.show("Error loading admissions data.", "error");
+      snackbar.show("Error loading admissions.", "error");
     } finally {
       setLoading(false);
     }
@@ -276,12 +271,45 @@ export default function AdmissionsPage() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Client-side instant filter to resolve the "auto-loading infinite loop/keystroke spinner" issue
+  // Dynamic quick toggling of branch settings directly on the Admissions page
+  const handleToggleEntranceExam = async () => {
+    if (!activeBranch) return;
+    setActionLoading(true);
+    try {
+      const nextSetting = !activeBranch.hasEntranceTest;
+      const res = await fetch(`/api/v1/branches/${activeBranch.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hasEntranceTest: nextSetting }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show(`Branch settings updated. Entrance exam: ${nextSetting ? "ENABLED" : "DISABLED"}`, "success");
+        // Update local state
+        setBranches((prev) =>
+          prev.map((b) => (b.id === activeBranch.id ? { ...b, hasEntranceTest: nextSetting } : b))
+        );
+        setActiveBranch((prev) => (prev ? { ...prev, hasEntranceTest: nextSetting } : null));
+      } else {
+        snackbar.show(data.error?.message || "Failed to update branch configuration.", "error");
+      }
+    } catch {
+      snackbar.show("Network error during branch configuration.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Client-side local filtering for keystroke search (prevents auto-loading infinite loops)
   const filteredApplications = useMemo(() => {
     return applications.filter((app) => {
+      // Archive filter
+      if (!includeArchives && (app.status === "ADMITTED" || app.status === "REJECTED" || app.status === "WITHDRAWN")) {
+        return false;
+      }
       // Grade filter
       if (classFilter !== "ALL" && app.class?.id !== classFilter) return false;
-      // Search text query
+      // Search text filter
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
@@ -292,7 +320,7 @@ export default function AdmissionsPage() {
         (app.motherName || "").toLowerCase().includes(q)
       );
     });
-  }, [applications, classFilter, searchQuery]);
+  }, [applications, classFilter, searchQuery, includeArchives]);
 
   const filteredInquiries = useMemo(() => {
     return inquiries.filter((inq) => {
@@ -307,73 +335,21 @@ export default function AdmissionsPage() {
     });
   }, [inquiries, searchQuery]);
 
-  // Direct status transition handler (Simple click selector fallback for simplified UI)
-  const handleDirectStatusChange = async (app: Application, targetStatus: string) => {
-    if (targetStatus === "DOCUMENT_VERIFICATION") {
-      openVerifyModal(app);
-    } else if (targetStatus === "TEST_SCHEDULED") {
-      if (!activeBranch?.hasEntranceTest) {
-        snackbar.show("This branch does not support entrance tests.", "warning");
-        return;
-      }
-      openExamModal(app);
-    } else if (targetStatus === "ADMITTED") {
-      openPromoteModal(app);
-    } else {
-      setActionLoading(true);
-      try {
-        const res = await fetch(`/api/v1/admissions/applications/${app.id}/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ applicationStatus: targetStatus }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          snackbar.show(`Candidate moved to ${targetStatus}`, "success");
-          fetchDashboardData();
-        } else {
-          snackbar.show(data.error?.message || "Failed to update status.", "error");
-        }
-      } catch {
-        snackbar.show("Network error.", "error");
-      } finally {
-        setActionLoading(false);
-      }
-    }
-  };
+  // Aggregate stats computation
+  const stats = useMemo(() => {
+    const activeApps = applications.filter((a) => a.status !== "ADMITTED" && a.status !== "REJECTED" && a.status !== "WITHDRAWN");
+    return {
+      activeCount: activeApps.length,
+      pendingVerify: activeApps.filter((a) => a.status === "SUBMITTED" || a.status === "DOCUMENT_VERIFICATION").length,
+      awaitingExam: activeApps.filter((a) => a.status === "TEST_SCHEDULED").length,
+      readyToEnroll: activeApps.filter((a) => a.status === "SHORTLISTED").length,
+    };
+  }, [applications]);
 
-  // Handle Drag & Drop
-  const handleDragStart = (e: React.DragEvent, app: Application) => {
-    e.dataTransfer.setData("applicationId", app.id);
-    e.dataTransfer.setData("sourceStatus", app.status);
-  };
-
-  const handleDragOver = (e: React.DragEvent, targetStatus: string) => {
-    e.preventDefault();
-    setDragOverColumn(targetStatus);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverColumn(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetStatus: string) => {
-    e.preventDefault();
-    setDragOverColumn(null);
-    const appId = e.dataTransfer.getData("applicationId");
-    const sourceStatus = e.dataTransfer.getData("sourceStatus");
-
-    if (!appId || sourceStatus === targetStatus) return;
-
-    const matchedApp = applications.find((app) => app.id === appId);
-    if (!matchedApp) return;
-
-    handleDirectStatusChange(matchedApp, targetStatus);
-  };
-
-  // Open modals with initialized states
-  const openVerifyModal = (app: Application) => {
+  // Open candidate details in Unified Workspace panel
+  const handleOpenWorkspace = async (app: Application) => {
     setSelectedApp(app);
+    // Initialize stepper wizard forms dynamically depending on candidate's current stage
     const docs = app.documents || [];
     setVerifyForm({
       documents: docs.map((d) => ({
@@ -385,11 +361,7 @@ export default function AdmissionsPage() {
       verificationNotes: app.verificationNotes || "",
       nextStatus: activeBranch?.hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED",
     });
-    setVerifyModalOpen(true);
-  };
 
-  const openExamModal = (app: Application) => {
-    setSelectedApp(app);
     setExamForm({
       examDate: app.examResult?.examDate
         ? new Date(app.examResult.examDate).toISOString().split("T")[0]
@@ -400,11 +372,7 @@ export default function AdmissionsPage() {
       notes: app.examResult?.notes || "",
       applicationStatus: "SHORTLISTED",
     });
-    setExamModalOpen(true);
-  };
 
-  const openPromoteModal = async (app: Application) => {
-    setSelectedApp(app);
     setPromoteForm({
       sectionId: "",
       rollNo: "",
@@ -414,30 +382,28 @@ export default function AdmissionsPage() {
       paymentMethod: "CASH",
       transactionId: "",
     });
-    setPromoteModalOpen(true);
 
-    // Fetch class sections
-    try {
-      const res = await fetch(`/api/v1/classes/${app.class?.id}/sections`);
-      const data = await res.json();
-      if (data.success) {
-        setClassSections(data.data);
-        if (data.data.length > 0) {
+    setWorkspaceOpen(true);
+
+    // If at Shortlist stage, load sections for class
+    if (app.status === "SHORTLISTED" && app.class?.id) {
+      try {
+        const res = await fetch(`/api/v1/classes/${app.class.id}/sections`);
+        const data = await res.json();
+        if (data.success && data.data.length > 0) {
+          setClassSections(data.data);
           setPromoteForm((prev) => ({ ...prev, sectionId: data.data[0].id }));
         }
+      } catch {
+        console.error("Failed to load sections.");
       }
-    } catch {
-      snackbar.show("Failed to load sections for promotion.", "error");
     }
   };
 
-  // Submissions
+  // Submissions inside wizards
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!branchFilter || !activeAcademicYearId) {
-      snackbar.show("Branch and Academic Year must be active.", "error");
-      return;
-    }
+    if (!branchFilter || !activeAcademicYearId) return;
     setActionLoading(true);
     try {
       const res = await fetch("/api/v1/admissions/inquiries", {
@@ -469,7 +435,7 @@ export default function AdmissionsPage() {
         snackbar.show(data.error?.message || "Failed to submit inquiry.", "error");
       }
     } catch {
-      snackbar.show("Network error occurred.", "error");
+      snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
     }
@@ -477,10 +443,7 @@ export default function AdmissionsPage() {
 
   const handleCreateApplication = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!branchFilter || !activeAcademicYearId) {
-      snackbar.show("Branch and Academic Year must be active.", "error");
-      return;
-    }
+    if (!branchFilter || !activeAcademicYearId) return;
     setActionLoading(true);
     try {
       const res = await fetch("/api/v1/admissions/applications", {
@@ -520,7 +483,7 @@ export default function AdmissionsPage() {
         snackbar.show(data.error?.message || "Failed to submit application.", "error");
       }
     } catch {
-      snackbar.show("Network error occurred.", "error");
+      snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
     }
@@ -542,14 +505,17 @@ export default function AdmissionsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Document status updated.", "success");
-        setVerifyModalOpen(false);
+        snackbar.show("Document checks updated.", "success");
+        // Fast UI refresh and reopen workspace with updated app details
+        const refreshedApp = data.data;
+        setApplications((prev) => prev.map((a) => (a.id === refreshedApp.id ? refreshedApp : a)));
+        handleOpenWorkspace(refreshedApp);
         fetchDashboardData();
       } else {
-        snackbar.show(data.error?.message || "Failed to save verification.", "error");
+        snackbar.show(data.error?.message || "Failed to verify documents.", "error");
       }
     } catch {
-      snackbar.show("Network error occurred.", "error");
+      snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
     }
@@ -575,14 +541,16 @@ export default function AdmissionsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Exam results logged.", "success");
-        setExamModalOpen(false);
+        snackbar.show("Exam score saved successfully.", "success");
+        const refreshedApp = data.data;
+        setApplications((prev) => prev.map((a) => (a.id === refreshedApp.id ? refreshedApp : a)));
+        handleOpenWorkspace(refreshedApp);
         fetchDashboardData();
       } else {
-        snackbar.show(data.error?.message || "Failed to save exam results.", "error");
+        snackbar.show(data.error?.message || "Failed to save exam details.", "error");
       }
     } catch {
-      snackbar.show("Network error occurred.", "error");
+      snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
     }
@@ -609,44 +577,34 @@ export default function AdmissionsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        snackbar.show("Candidate promoted to student successfully!", "success");
-        setPromoteModalOpen(false);
+        snackbar.show("Candidate successfully promoted to student!", "success");
+        setWorkspaceOpen(false);
         fetchDashboardData();
       } else {
-        snackbar.show(data.error?.message || "Failed to promote candidate.", "error");
+        snackbar.show(data.error?.message || "Failed to promote student.", "error");
       }
     } catch {
-      snackbar.show("Network error occurred.", "error");
+      snackbar.show("Network error.", "error");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Status mapping descriptors for labels
+  // Helper labels mapping
   const statusLabels: Record<string, string> = {
+    DRAFT: "Draft",
     SUBMITTED: "Submitted",
-    DOCUMENT_VERIFICATION: "Doc Verification",
-    TEST_SCHEDULED: "Entrance Test",
+    DOCUMENT_VERIFICATION: "Doc Check",
+    TEST_SCHEDULED: "Entrance Exam",
     SHORTLISTED: "Shortlisted",
-    ADMITTED: "Admitted",
+    ADMITTED: "Enrolled (Admitted)",
     REJECTED: "Rejected",
     WITHDRAWN: "Withdrawn",
   };
 
-  // Columns layout configurations
-  const pipelineColumns = [
-    { key: "SUBMITTED", name: "Submitted", icon: "upload", color: "border-t-sky-500 text-sky-700 bg-sky-50/50" },
-    { key: "DOCUMENT_VERIFICATION", name: "Doc Verification", icon: "check_circle", color: "border-t-amber-500 text-amber-700 bg-amber-50/50" },
-    ...(activeBranch?.hasEntranceTest
-      ? [{ key: "TEST_SCHEDULED", name: "Entrance Test", icon: "event", color: "border-t-purple-500 text-purple-700 bg-purple-50/50" }]
-      : []),
-    { key: "SHORTLISTED", name: "Shortlisted", icon: "star", color: "border-t-teal-500 text-teal-700 bg-teal-50/50" },
-    { key: "ADMITTED", name: "Admitted", icon: "school", color: "border-t-emerald-500 text-emerald-700 bg-emerald-50/50" },
-  ];
-
   return (
     <div className="flex flex-col h-full space-y-6 overflow-hidden">
-      {/* 1. Header Section */}
+      {/* 1. Header & Quick Settings Switch */}
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 shrink-0">
         <div>
           <Breadcrumb>
@@ -654,37 +612,97 @@ export default function AdmissionsPage() {
             <BreadcrumbItem>Admissions</BreadcrumbItem>
           </Breadcrumb>
           <h1 className="text-headline-md font-semibold text-on-surface">
-            Admission & Enrollment Control Center
+            Admissions Overview Desk
           </h1>
           <p className="text-body-md text-on-surface-variant">
-            Manage inquiries, applicant document verification, entrance exams, and student promotions.
+            A unified pipeline manager for counseling inquiries and applicant promotions.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            className={activeTab === "pipeline" ? "bg-primary text-white" : ""}
-            variant={activeTab === "pipeline" ? "filled" : "outlined"}
-            icon="app_registration"
-            onClick={() => setActiveTab("pipeline")}
-          >
-            Admissions Pipeline
-          </Button>
-          <Button
-            className={activeTab === "inquiries" ? "bg-primary text-white" : ""}
-            variant={activeTab === "inquiries" ? "filled" : "outlined"}
-            icon="group"
-            onClick={() => setActiveTab("inquiries")}
-          >
-            Counselor Inquiries
-          </Button>
-        </div>
+        {/* Dynamic Branch Settings Switch directly on header */}
+        {activeBranch && (
+          <div className="flex items-center gap-3 bg-surface-container-lowest p-3 border border-outline-variant/60 rounded-xl shadow-elevation-1">
+            <Icon name="palette" size={18} className="text-primary shrink-0" />
+            <div className="text-left">
+              <span className="block text-[11px] text-slate-400 font-bold uppercase tracking-wide">Entrance Examination</span>
+              <span className="text-xs font-semibold text-slate-700">
+                {activeBranch.hasEntranceTest ? "Required for Admissions" : "Skipped (Direct Selection)"}
+              </span>
+            </div>
+            {isSuperAdmin && (
+              <button
+                onClick={handleToggleEntranceExam}
+                disabled={actionLoading}
+                className={`ml-2 relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                  activeBranch.hasEntranceTest ? "bg-primary" : "bg-slate-200"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                    activeBranch.hasEntranceTest ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* 2. Filters & Actions Panel */}
+      {/* 2. Silicon Valley Style KPI Aggregate Stats Widgets */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+        <Card variant="outlined" className="bg-gradient-to-br from-white to-sky-50/20 border-sky-100">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-sky-100 text-sky-700">
+              <Icon name="app_registration" size={20} />
+            </div>
+            <div>
+              <span className="block text-[11px] text-slate-400 font-bold uppercase">Active Applicants</span>
+              <span className="text-headline-sm font-bold text-slate-800">{stats.activeCount}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" className="bg-gradient-to-br from-white to-amber-50/20 border-amber-100">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-amber-100 text-amber-700">
+              <Icon name="check_circle" size={20} />
+            </div>
+            <div>
+              <span className="block text-[11px] text-slate-400 font-bold uppercase">Pending Verification</span>
+              <span className="text-headline-sm font-bold text-slate-800">{stats.pendingVerify}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" className="bg-gradient-to-br from-white to-purple-50/20 border-purple-100">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-purple-100 text-purple-700">
+              <Icon name="event" size={20} />
+            </div>
+            <div>
+              <span className="block text-[11px] text-slate-400 font-bold uppercase">Awaiting Entrance Exam</span>
+              <span className="text-headline-sm font-bold text-slate-800">{stats.awaitingExam}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" className="bg-gradient-to-br from-white to-teal-50/20 border-teal-100">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-teal-100 text-teal-700">
+              <Icon name="star" size={20} />
+            </div>
+            <div>
+              <span className="block text-[11px] text-slate-400 font-bold uppercase">Ready to Promote</span>
+              <span className="text-headline-sm font-bold text-slate-800">{stats.readyToEnroll}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 3. Filtering Desk Panel */}
       <div className="flex flex-col space-y-4 p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/60 shadow-elevation-1 shrink-0 md:flex-row md:items-center md:space-y-0 md:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4 flex-1">
-          {/* Branch filter (locked for branch admins) */}
+          {/* Branch filter (superadmin scope) */}
           <div className="w-52 shrink-0">
             <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Branch Scope</label>
             <Select value={branchFilter} onValueChange={setBranchFilter} disabled={!isSuperAdmin}>
@@ -701,10 +719,10 @@ export default function AdmissionsPage() {
             </Select>
           </div>
 
-          {/* Class filter (only in pipeline view) */}
-          {activeTab === "pipeline" && (
+          {/* Grade filter */}
+          {activeTab === "applications" && (
             <div className="w-48 shrink-0">
-              <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Grade / Class</label>
+              <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Applied Grade</label>
               <Select value={classFilter} onValueChange={setClassFilter}>
                 <SelectTrigger fullWidth>
                   <SelectValue placeholder="All Classes" />
@@ -724,36 +742,25 @@ export default function AdmissionsPage() {
           {/* Search bar */}
           <div className="flex-1 min-w-[240px] pt-5">
             <SearchBar
-              placeholder="Search candidate name, app number, or parent details..."
+              placeholder="Search candidate name, application ID, or parents details..."
               value={searchQuery}
               onChange={setSearchQuery}
             />
           </div>
         </div>
 
-        {/* View Mode Toggle & Actions */}
-        <div className="flex items-center gap-3 self-end md:self-auto shrink-0">
-          {activeTab === "pipeline" && (
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2">
-              <button
-                onClick={() => setViewMode("list")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 ${
-                  viewMode === "list" ? "bg-white text-primary shadow-sm" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Icon name="filter_list" size={14} />
-                List View
-              </button>
-              <button
-                onClick={() => setViewMode("kanban")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-200 ${
-                  viewMode === "kanban" ? "bg-white text-primary shadow-sm" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Icon name="dashboard" size={14} />
-                Kanban
-              </button>
-            </div>
+        {/* Toggle include archives and Actions */}
+        <div className="flex items-center gap-4 self-end md:self-auto shrink-0">
+          {activeTab === "applications" && (
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-slate-600 bg-slate-100 border px-3 py-2.5 rounded-xl hover:bg-slate-200 transition-colors">
+              <input
+                type="checkbox"
+                checked={includeArchives}
+                onChange={(e) => setIncludeArchives(e.target.checked)}
+                className="rounded text-primary focus:ring-primary w-4 h-4"
+              />
+              Show Enrolled/Rejected Archives
+            </label>
           )}
 
           <Button
@@ -761,7 +768,7 @@ export default function AdmissionsPage() {
             icon="group_add"
             onClick={() => {
               if (classes.length === 0) {
-                snackbar.show("Please create classes for this branch first.", "warning");
+                snackbar.show("Please create classes first.", "warning");
                 return;
               }
               setInquiryForm((prev) => ({ ...prev, classAppliedId: classes[0].id }));
@@ -776,7 +783,7 @@ export default function AdmissionsPage() {
             className="bg-primary text-white"
             onClick={() => {
               if (classes.length === 0) {
-                snackbar.show("Please create classes for this branch first.", "warning");
+                snackbar.show("Please create classes first.", "warning");
                 return;
               }
               setAppForm((prev) => ({ ...prev, classId: classes[0].id }));
@@ -788,388 +795,152 @@ export default function AdmissionsPage() {
         </div>
       </div>
 
-      {/* Helper User Guide banner for clarity */}
-      <div className="p-4 bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-3 shrink-0">
-        <Icon name="sparkles" className="text-primary shrink-0" size={20} />
-        <p className="text-xs text-on-surface-variant">
-          <span className="font-bold text-primary">माहिती मार्गदर्शक:</span> नवीन प्रवेश प्रक्रियेत उमेदवाराला पुढे नेण्यासाठी तुम्ही **List View** मध्ये थेट कृती बटणे वापरू शकता किंवा **Kanban View** मध्ये ड्रॅग-अँड-ड्रॉप करू शकता. कागदपत्रे तपासल्यानंतर प्रवेश परीक्षा आणि शेवटी **Promote to Student** करून विद्यार्थ्याचे अधिकृत खाते तयार होते.
-        </p>
+      {/* 4. Tab Navigation Desks */}
+      <div className="flex items-center border-b border-outline-variant/60 shrink-0">
+        <button
+          onClick={() => setActiveTab("applications")}
+          className={`px-5 py-3 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === "applications"
+              ? "border-primary text-primary"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Applications Desk ({filteredApplications.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("inquiries")}
+          className={`px-5 py-3 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === "inquiries"
+              ? "border-primary text-primary"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Counselor Inquiries ({filteredInquiries.length})
+        </button>
       </div>
 
-      {/* 3. Main Content Views */}
+      {/* 5. Main Desks Lists */}
       <div className="flex-1 overflow-hidden min-h-0">
-        {loading ? (
-          <div className="flex items-center justify-center h-full space-x-2">
-            <Icon name="history" size={24} className="animate-spin text-primary" />
-            <span className="text-body-lg text-on-surface-variant font-medium">Loading records...</span>
-          </div>
-        ) : activeTab === "pipeline" ? (
-          viewMode === "kanban" ? (
-            /* 3A. Kanban Board View */
-            <div className="grid grid-cols-1 md:grid-flow-col auto-cols-fr gap-4 h-full overflow-x-auto pb-4 items-stretch">
-              {pipelineColumns.map((col) => {
-                const colApps = filteredApplications.filter((app) => {
-                  if (app.status === "TEST_SCHEDULED" && !activeBranch?.hasEntranceTest) {
-                    return col.key === "SHORTLISTED";
-                  }
-                  return app.status === col.key;
-                });
-
-                const isTargeting = dragOverColumn === col.key;
-
-                return (
-                  <div
-                    key={col.key}
-                    onDragOver={(e) => handleDragOver(e, col.key)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, col.key)}
-                    className={`flex flex-col rounded-2xl border transition-all duration-300 min-w-[290px] h-full ${
-                      isTargeting
-                        ? "border-primary border-dashed bg-primary-container/20 scale-[1.01]"
-                        : "border-outline-variant/60 bg-surface-container-low"
-                    }`}
-                  >
-                    {/* Column Header */}
-                    <div className={`p-4 rounded-t-2xl border-t-4 flex items-center justify-between font-semibold ${col.color} shrink-0`}>
-                      <div className="flex items-center gap-2">
-                        <Icon name={col.icon} size={18} />
-                        <span>{col.name}</span>
-                      </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-label-sm bg-white border border-outline-variant/40 shadow-sm">
-                        {colApps.length}
-                      </span>
-                    </div>
-
-                    {/* Column Body Cards list */}
-                    <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-                      {colApps.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-outline-variant/30 rounded-xl text-on-surface-variant/40">
-                          <Icon name="inbox" size={24} className="mb-1" />
-                          <span className="text-label-md">No candidates</span>
-                        </div>
-                      ) : (
-                        colApps.map((app) => {
-                          const docs = app.documents || [];
-                          const verifiedDocsCount = docs.filter((d) => d.status === "VERIFIED").length;
-                          const totalDocs = docs.length;
-
-                          return (
-                            <div
-                              key={app.id}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, app)}
-                              onClick={() => {
-                                setSelectedApp(app);
-                                setDetailsModalOpen(true);
-                              }}
-                              className="p-4 rounded-xl border border-outline-variant/40 bg-surface-container-lowest hover:border-primary/50 hover:shadow-elevation-2 transition-all duration-300 cursor-grab active:cursor-grabbing group relative space-y-2.5"
-                            >
-                              {/* Card Header info */}
-                              <div className="flex justify-between items-start">
-                                <span className="text-label-sm font-semibold tracking-wider text-primary">
-                                  {app.applicationNo}
-                                </span>
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-container text-on-primary-container">
-                                  {app.class?.name || "N/A"}
-                                </span>
-                              </div>
-
-                              {/* Candidate Name */}
-                              <div>
-                                <h4 className="text-body-md font-bold text-on-surface group-hover:text-primary transition-colors">
-                                  {app.firstName} {app.lastName}
-                                </h4>
-                              </div>
-
-                              <div className="space-y-1.5 text-body-sm text-on-surface-variant">
-                                {app.fatherName && (
-                                  <div className="flex items-center gap-1.5">
-                                    <Icon name="person" size={14} className="text-slate-400" />
-                                    <span>{app.fatherName}</span>
-                                  </div>
-                                )}
-                                {(app.fatherPhone || app.motherPhone) && (
-                                  <div className="flex items-center gap-1.5">
-                                    <Icon name="phone" size={14} className="text-slate-400" />
-                                    <span>{app.fatherPhone || app.motherPhone}</span>
-                                  </div>
-                                )}
-
-                                {/* Docs count status */}
-                                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                                  <span className="text-[11px] font-medium flex items-center gap-1">
-                                    <Icon
-                                      name={verifiedDocsCount === totalDocs && totalDocs > 0 ? "verified" : "upload"}
-                                      size={12}
-                                      className={verifiedDocsCount === totalDocs && totalDocs > 0 ? "text-emerald-500" : "text-amber-500"}
-                                    />
-                                    {totalDocs > 0 ? `${verifiedDocsCount}/${totalDocs} Verified` : "No Docs"}
-                                  </span>
-
-                                  {app.examResult && (
-                                    <span
-                                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                        app.examResult.verdict === "PASS"
-                                          ? "bg-emerald-100 text-emerald-800"
-                                          : app.examResult.verdict === "FAIL"
-                                          ? "bg-red-100 text-red-800"
-                                          : "bg-purple-100 text-purple-800"
-                                      }`}
-                                    >
-                                      Test: {app.examResult.marksObtained !== null ? `${app.examResult.marksObtained}/${app.examResult.maxMarks}` : "Scheduled"}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Simple Status Changer Selector (Dropdown Fallback for Simple Operating) */}
-                              <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-100 gap-2">
-                                <span className="text-[10px] text-slate-400 font-medium shrink-0">Move To:</span>
-                                <select
-                                  value={app.status}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    handleDirectStatusChange(app, e.target.value);
-                                  }}
-                                  className="text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 focus:outline-none cursor-pointer w-full max-w-[140px]"
-                                >
-                                  <option value="SUBMITTED">Submitted</option>
-                                  <option value="DOCUMENT_VERIFICATION">Verification</option>
-                                  {activeBranch?.hasEntranceTest && <option value="TEST_SCHEDULED">Entrance Test</option>}
-                                  <option value="SHORTLISTED">Shortlisted</option>
-                                  <option value="ADMITTED">Admitted</option>
-                                  <option value="REJECTED">Reject</option>
-                                </select>
-                              </div>
-
-                              {/* Quick contextual action buttons */}
-                              <div className="flex justify-end gap-1.5 border-t border-slate-100 pt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                {app.status === "SUBMITTED" && (
-                                  <Button
-                                    variant="text"
-                                    size="sm"
-                                    className="text-primary text-[11px] h-7 px-2"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openVerifyModal(app);
-                                    }}
-                                  >
-                                    Verify Documents
-                                  </Button>
-                                )}
-                                {app.status === "DOCUMENT_VERIFICATION" && (
-                                  <Button
-                                    variant="text"
-                                    size="sm"
-                                    className="text-primary text-[11px] h-7 px-2"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openVerifyModal(app);
-                                    }}
-                                  >
-                                    Verify Docs
-                                  </Button>
-                                )}
-                                {app.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
-                                  <Button
-                                    variant="text"
-                                    size="sm"
-                                    className="text-purple-600 text-[11px] h-7 px-2"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openExamModal(app);
-                                    }}
-                                  >
-                                    Log Marks
-                                  </Button>
-                                )}
-                                {app.status === "SHORTLISTED" && (
-                                  <Button
-                                    variant="text"
-                                    size="sm"
-                                    className="text-emerald-600 text-[11px] h-7 px-2 hover:bg-emerald-50"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openPromoteModal(app);
-                                    }}
-                                  >
-                                    Promote Student
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* 3B. Traditional List View Mode (Highly requested for simple real-world operation!) */
-            <div className="h-full overflow-y-auto bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-title-lg font-bold text-on-surface">Active Admission Applicants</h3>
-                <span className="text-body-sm text-on-surface-variant font-semibold">{filteredApplications.length} applicants listed</span>
+        {activeTab === "applications" ? (
+          <div className="h-full overflow-y-auto bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6">
+            {filteredApplications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40">
+                <Icon name="people" size={48} className="mb-2" />
+                <p className="text-body-lg">No active applicants matching filters.</p>
               </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-outline-variant text-label-md font-bold text-on-surface-variant">
+                      <th className="py-3 px-4">Application ID</th>
+                      <th className="py-3 px-4">Candidate Name</th>
+                      <th className="py-3 px-4">Target Class</th>
+                      <th className="py-3 px-4">Active Stage</th>
+                      <th className="py-3 px-4">Docs Verified</th>
+                      <th className="py-3 px-4">Entrance exam</th>
+                      <th className="py-3 px-4 text-right">Wizard Desk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredApplications.map((app) => {
+                      const docs = app.documents || [];
+                      const verifiedDocsCount = docs.filter((d) => d.status === "VERIFIED").length;
+                      const totalDocs = docs.length;
 
-              {filteredApplications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40">
-                  <Icon name="people" size={48} className="mb-2" />
-                  <p className="text-body-lg">No matching applicants found.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-outline-variant text-label-md font-bold text-on-surface-variant">
-                        <th className="py-3 px-4">Application No</th>
-                        <th className="py-3 px-4">Applicant Name</th>
-                        <th className="py-3 px-4">Grade</th>
-                        <th className="py-3 px-4">Current Stage</th>
-                        <th className="py-3 px-4">Documents</th>
-                        <th className="py-3 px-4">Test Status</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredApplications.map((app) => {
-                        const docs = app.documents || [];
-                        const verifiedDocsCount = docs.filter((d) => d.status === "VERIFIED").length;
-                        const totalDocs = docs.length;
-
-                        return (
-                          <tr key={app.id} className="border-b border-outline-variant/40 hover:bg-slate-50 transition-colors">
-                            <td className="py-3.5 px-4 font-semibold text-primary">{app.applicationNo}</td>
-                            <td className="py-3.5 px-4">
-                              <div className="font-bold text-on-surface">{app.firstName} {app.lastName}</div>
-                              <div className="text-xs text-slate-400">Parent: {app.fatherName || app.motherName || "—"}</div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border">
-                                {app.class?.name || "N/A"}
+                      return (
+                        <tr
+                          key={app.id}
+                          onClick={() => handleOpenWorkspace(app)}
+                          className="border-b border-outline-variant/40 hover:bg-slate-50 transition-colors cursor-pointer"
+                        >
+                          <td className="py-4 px-4 font-bold text-primary">{app.applicationNo}</td>
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-on-surface">{app.firstName} {app.lastName}</div>
+                            <div className="text-xs text-slate-400">Parent: {app.fatherName || app.motherName || "—"}</div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border">
+                              {app.class?.name || "N/A"}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                app.status === "ADMITTED"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : app.status === "SHORTLISTED"
+                                  ? "bg-teal-100 text-teal-800"
+                                  : app.status === "TEST_SCHEDULED"
+                                  ? "bg-purple-100 text-purple-800"
+                                  : app.status === "DOCUMENT_VERIFICATION"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }`}
+                            >
+                              {statusLabels[app.status] || app.status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-xs font-semibold text-slate-600">
+                            {totalDocs > 0 ? (
+                              <span className={verifiedDocsCount === totalDocs ? "text-emerald-600 font-bold" : ""}>
+                                {verifiedDocsCount}/{totalDocs} files verified
                               </span>
-                            </td>
-                            <td className="py-3.5 px-4">
+                            ) : (
+                              <span className="text-slate-400 font-normal">Checklist empty</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4">
+                            {app.examResult ? (
                               <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                  app.status === "ADMITTED"
+                                className={`px-2.5 py-0.5 rounded text-xs font-bold ${
+                                  app.examResult.verdict === "PASS"
                                     ? "bg-emerald-100 text-emerald-800"
-                                    : app.status === "SHORTLISTED"
-                                    ? "bg-teal-100 text-teal-800"
-                                    : app.status === "TEST_SCHEDULED"
-                                    ? "bg-purple-100 text-purple-800"
-                                    : app.status === "DOCUMENT_VERIFICATION"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-blue-100 text-blue-800"
+                                    : app.examResult.verdict === "FAIL"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-purple-100 text-purple-800"
                                 }`}
                               >
-                                {statusLabels[app.status] || app.status}
+                                {app.examResult.marksObtained !== null ? `${app.examResult.marksObtained}/${app.examResult.maxMarks} Marks` : "Scheduled"}
                               </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-xs font-medium text-slate-600">
-                              {totalDocs > 0 ? (
-                                <span className={verifiedDocsCount === totalDocs ? "text-emerald-600 font-bold" : ""}>
-                                  {verifiedDocsCount}/{totalDocs} Verified
-                                </span>
-                              ) : (
-                                <span className="text-slate-400">No documents</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4">
-                              {app.examResult ? (
-                                <span
-                                  className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                    app.examResult.verdict === "PASS"
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : app.examResult.verdict === "FAIL"
-                                      ? "bg-red-100 text-red-800"
-                                      : "bg-purple-100 text-purple-800"
-                                  }`}
-                                >
-                                  {app.examResult.marksObtained !== null ? `${app.examResult.marksObtained}/${app.examResult.maxMarks}` : "Scheduled"}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-slate-400">—</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="outlined"
-                                  size="sm"
-                                  onClick={() => {
-                                    setSelectedApp(app);
-                                    setDetailsModalOpen(true);
-                                  }}
-                                >
-                                  Details
-                                </Button>
-                                {app.status === "SUBMITTED" && (
-                                  <Button
-                                    variant="filled"
-                                    className="bg-primary text-white"
-                                    size="sm"
-                                    onClick={() => openVerifyModal(app)}
-                                  >
-                                    Verify Docs
-                                  </Button>
-                                )}
-                                {app.status === "DOCUMENT_VERIFICATION" && (
-                                  <Button
-                                    variant="filled"
-                                    className="bg-primary text-white"
-                                    size="sm"
-                                    onClick={() => openVerifyModal(app)}
-                                  >
-                                    Verify Docs
-                                  </Button>
-                                )}
-                                {app.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
-                                  <Button
-                                    variant="filled"
-                                    className="bg-purple-600 hover:bg-purple-700 text-white"
-                                    size="sm"
-                                    onClick={() => openExamModal(app)}
-                                  >
-                                    Score Log
-                                  </Button>
-                                )}
-                                {app.status === "SHORTLISTED" && (
-                                  <Button
-                                    variant="filled"
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                    size="sm"
-                                    onClick={() => openPromoteModal(app)}
-                                  >
-                                    Admit Student
-                                  </Button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <Button
+                              variant="outlined"
+                              size="sm"
+                              icon="arrow_back"
+                              className="rotate-180 text-primary border-primary/30"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenWorkspace(app);
+                              }}
+                            >
+                              Open Workspace
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         ) : (
-          /* Counselor Inquiries Tab View (Simple Table/List) */
+          /* Counselor Inquiries Table Desk */
           <div className="h-full overflow-y-auto bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-title-lg font-bold text-on-surface">Recent Student Inquiries</h3>
-              <span className="text-body-sm text-on-surface-variant font-semibold">{filteredInquiries.length} inquiries log</span>
+              <h3 className="text-title-lg font-bold text-on-surface">Prospect Counselor Logs</h3>
+              <span className="text-body-sm text-on-surface-variant font-semibold">{filteredInquiries.length} logged inquiries</span>
             </div>
 
             {filteredInquiries.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant/40">
                 <Icon name="people" size={48} className="mb-2" />
-                <p className="text-body-lg">No inquiries logged yet for this branch.</p>
+                <p className="text-body-lg">No inquiries matching filter logs.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1177,36 +948,36 @@ export default function AdmissionsPage() {
                   <thead>
                     <tr className="border-b border-outline-variant text-label-md font-bold text-on-surface-variant">
                       <th className="py-3 px-4">Student Name</th>
-                      <th className="py-3 px-4">Applied Grade</th>
+                      <th className="py-3 px-4">Grade</th>
                       <th className="py-3 px-4">Parent Details</th>
-                      <th className="py-3 px-4">Logged Date</th>
-                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Date Logged</th>
+                      <th className="py-3 px-4">Current Status</th>
                       <th className="py-3 px-4">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredInquiries.map((inq) => (
                       <tr key={inq.id} className="border-b border-outline-variant/40 hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-4 font-bold text-on-surface">{inq.studentName}</td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800 border">
+                        <td className="py-3.5 px-4 font-bold text-on-surface">{inq.studentName}</td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800 border">
                             {inq.classApplied?.name || "N/A"}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-body-sm text-on-surface-variant">
+                        <td className="py-3.5 px-4 text-body-sm text-on-surface-variant">
                           <div>{inq.parentName}</div>
                           <div className="text-xs">{inq.parentPhone} | {inq.parentEmail}</div>
                         </td>
-                        <td className="py-3 px-4 text-body-sm text-on-surface-variant">
+                        <td className="py-3.5 px-4 text-body-sm text-on-surface-variant">
                           {new Date(inq.createdAt).toLocaleDateString("en-IN", {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
                           })}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3.5 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                               inq.status === "APPLIED"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : inq.status === "VISITED"
@@ -1219,14 +990,13 @@ export default function AdmissionsPage() {
                             {inq.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3.5 px-4">
                           {inq.status !== "APPLIED" && (
                             <Button
                               variant="outlined"
                               size="sm"
                               icon="app_registration"
                               onClick={() => {
-                                // Prefill application form
                                 setAppForm((prev) => ({
                                   ...prev,
                                   firstName: inq.studentName.split(" ")[0] || "",
@@ -1253,13 +1023,543 @@ export default function AdmissionsPage() {
         )}
       </div>
 
-      {/* ─── DIALOGS / DRAWER COMPONENTS ──────────────────────────────── */}
+      {/* ─── REDESIGNED UNIFIED APPLICANT WORKSPACE PANEL (MODAL split-pane) ─── */}
+      <Dialog open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
+        <DialogContent className="max-w-5xl h-[88vh] overflow-hidden flex flex-col p-0 rounded-2xl bg-surface-container-lowest border border-outline-variant">
+          {selectedApp && (
+            <>
+              {/* Header Title bar */}
+              <div className="p-5 border-b border-outline-variant bg-slate-50 flex items-center justify-between shrink-0">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-primary text-white">
+                      {statusLabels[selectedApp.status] || selectedApp.status}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400">Application Number:</span>
+                    <span className="text-xs font-bold text-slate-700">{selectedApp.applicationNo}</span>
+                  </div>
+                  <h2 className="text-title-lg font-bold text-on-surface mt-1">
+                    {selectedApp.firstName} {selectedApp.lastName}
+                  </h2>
+                </div>
+                <DialogClose className="p-1.5 rounded-full text-slate-400 hover:bg-slate-200 transition-colors mr-10">
+                  <Icon name="close" size={20} />
+                </DialogClose>
+              </div>
 
-      {/* 1. Inquiry Modal */}
+              {/* Stepper Wizard Horizontal Path */}
+              <div className="p-4 bg-white border-b border-outline-variant/60 flex items-center justify-around text-center shrink-0 overflow-x-auto">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <span className="p-1 px-2.5 rounded-full bg-emerald-100 text-emerald-800">1</span>
+                  <span>Submitted</span>
+                </div>
+                <div className="text-slate-300">➔</div>
+                <div className="flex items-center gap-1.5 text-xs font-bold">
+                  <span
+                    className={`p-1 px-2.5 rounded-full ${
+                      selectedApp.status !== "SUBMITTED"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-primary text-white"
+                    }`}
+                  >
+                    2
+                  </span>
+                  <span className={selectedApp.status === "DOCUMENT_VERIFICATION" ? "text-primary font-extrabold" : "text-slate-700"}>
+                    Document Verification
+                  </span>
+                </div>
+                {activeBranch?.hasEntranceTest && (
+                  <>
+                    <div className="text-slate-300">➔</div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <span
+                        className={`p-1 px-2.5 rounded-full ${
+                          selectedApp.status === "SHORTLISTED" || selectedApp.status === "ADMITTED"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : selectedApp.status === "TEST_SCHEDULED"
+                            ? "bg-primary text-white"
+                            : "bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        3
+                      </span>
+                      <span className={selectedApp.status === "TEST_SCHEDULED" ? "text-primary font-extrabold" : "text-slate-500"}>
+                        Entrance Test
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="text-slate-300">➔</div>
+                <div className="flex items-center gap-1.5 text-xs font-bold">
+                  <span
+                    className={`p-1 px-2.5 rounded-full ${
+                      selectedApp.status === "ADMITTED"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : selectedApp.status === "SHORTLISTED"
+                        ? "bg-primary text-white"
+                        : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    {activeBranch?.hasEntranceTest ? "4" : "3"}
+                  </span>
+                  <span className={selectedApp.status === "SHORTLISTED" ? "text-primary font-extrabold" : "text-slate-500"}>
+                    Shortlisted Selection
+                  </span>
+                </div>
+                <div className="text-slate-300">➔</div>
+                <div className="flex items-center gap-1.5 text-xs font-bold">
+                  <span
+                    className={`p-1 px-2.5 rounded-full ${
+                      selectedApp.status === "ADMITTED" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    {activeBranch?.hasEntranceTest ? "5" : "4"}
+                  </span>
+                  <span className={selectedApp.status === "ADMITTED" ? "text-emerald-600 font-extrabold" : "text-slate-500"}>
+                    Enrolled (Promoted)
+                  </span>
+                </div>
+              </div>
+
+              {/* Main Split Body Area */}
+              <div className="flex-1 flex overflow-hidden min-h-0">
+                {/* A. Left Pane: Candidate Profile Summary */}
+                <div className="w-[38%] overflow-y-auto p-5 border-r border-outline-variant space-y-5">
+                  <div>
+                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Application Details</h3>
+                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-1.5 text-xs">
+                      <p><span className="font-semibold text-slate-500">Grade Applied:</span> {selectedApp.class?.name || "N/A"}</p>
+                      <p><span className="font-semibold text-slate-500">Academic Year:</span> {selectedApp.academicYear?.name || "N/A"}</p>
+                      <p><span className="font-semibold text-slate-500">Application Status:</span> {selectedApp.status}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Personal Details</h3>
+                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-2 text-xs">
+                      <p><span className="font-semibold text-slate-500">Birth Date:</span> {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN")}</p>
+                      <p><span className="font-semibold text-slate-500">Gender:</span> {selectedApp.gender}</p>
+                      <p><span className="font-semibold text-slate-500">Address:</span> {selectedApp.address}, {selectedApp.pincode}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-label-md text-primary font-bold uppercase tracking-wider mb-2">Family Contacts</h3>
+                    <div className="p-3.5 bg-slate-50 border rounded-xl space-y-3 text-xs">
+                      {selectedApp.fatherName && (
+                        <div>
+                          <p className="font-bold text-slate-700">Father: {selectedApp.fatherName}</p>
+                          <p className="text-[11px] text-slate-400">Phone: {selectedApp.fatherPhone || "—"} | Occ: {selectedApp.fatherOccupation || "—"}</p>
+                        </div>
+                      )}
+                      {selectedApp.motherName && (
+                        <div>
+                          <p className="font-bold text-slate-700">Mother: {selectedApp.motherName}</p>
+                          <p className="text-[11px] text-slate-400">Phone: {selectedApp.motherPhone || "—"} | Occ: {selectedApp.motherOccupation || "—"}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* B. Right Pane: Wizard Active Card Forms */}
+                <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-6">
+                  {/* Step 2 Form: Document verification */}
+                  {(selectedApp.status === "SUBMITTED" || selectedApp.status === "DOCUMENT_VERIFICATION") && (
+                    <Card variant="outlined" className="border-amber-200 bg-white shadow-sm">
+                      <CardContent className="p-5 space-y-4">
+                        <div className="flex items-center gap-2 text-amber-800 font-bold">
+                          <Icon name="check_circle" size={20} />
+                          <h3>Step 2: Document Checklist Verification</h3>
+                        </div>
+                        <p className="text-xs text-slate-500">Verify candidate documents. If none are present, click to initialize checklist.</p>
+
+                        <form onSubmit={handleVerifyDocuments} className="space-y-4">
+                          {verifyForm.documents.length === 0 ? (
+                            <div className="p-4 bg-slate-50 border border-dashed rounded-xl flex flex-col items-center justify-center">
+                              <p className="text-xs text-slate-400 mb-2">No documents checklists initialized yet.</p>
+                              <Button
+                                type="button"
+                                variant="outlined"
+                                size="sm"
+                                onClick={() => {
+                                  setVerifyForm((prev) => ({
+                                    ...prev,
+                                    documents: [
+                                      { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate" },
+                                      { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card" },
+                                    ],
+                                  }));
+                                }}
+                              >
+                                Initialize Checklist Checklist
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {verifyForm.documents.map((doc, idx) => (
+                                <div key={doc.id} className="p-3.5 border rounded-xl bg-slate-50/50 flex flex-col space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-xs text-slate-700">{doc.documentType}</span>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const clone = [...verifyForm.documents];
+                                          clone[idx].status = "VERIFIED";
+                                          setVerifyForm({ ...verifyForm, documents: clone });
+                                        }}
+                                        className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                                          doc.status === "VERIFIED"
+                                            ? "bg-emerald-600 border-emerald-600 text-white"
+                                            : "bg-white hover:bg-slate-100 text-slate-600"
+                                        }`}
+                                      >
+                                        Verify
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const clone = [...verifyForm.documents];
+                                          clone[idx].status = "REJECTED";
+                                          setVerifyForm({ ...verifyForm, documents: clone });
+                                        }}
+                                        className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                                          doc.status === "REJECTED"
+                                            ? "bg-red-600 border-red-600 text-white"
+                                            : "bg-white hover:bg-slate-100 text-slate-600"
+                                        }`}
+                                      >
+                                        Reject
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <TextField
+                                    label="Remarks"
+                                    value={doc.remarks}
+                                    placeholder="Clerk verification remarks"
+                                    onChange={(e) => {
+                                      const clone = [...verifyForm.documents];
+                                      clone[idx].remarks = e.target.value;
+                                      setVerifyForm({ ...verifyForm, documents: clone });
+                                    }}
+                                    className="h-10 mt-1"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <TextField
+                            label="Summary Verification Notes"
+                            value={verifyForm.verificationNotes}
+                            onChange={(e) => setVerifyForm({ ...verifyForm, verificationNotes: e.target.value })}
+                          />
+
+                          <div>
+                            <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Advance Pipeline To</label>
+                            <Select
+                              value={verifyForm.nextStatus}
+                              onValueChange={(val: any) => setVerifyForm({ ...verifyForm, nextStatus: val })}
+                            >
+                              <SelectTrigger fullWidth>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {activeBranch?.hasEntranceTest ? (
+                                  <SelectItem value="TEST_SCHEDULED">Move to Entrance Examination</SelectItem>
+                                ) : (
+                                  <SelectItem value="SHORTLISTED">Direct Shortlist (Approved)</SelectItem>
+                                )}
+                                <SelectItem value="DOCUMENT_VERIFICATION">Keep in Verification stage</SelectItem>
+                                <SelectItem value="REJECTED">Reject Application</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="pt-2 flex justify-end">
+                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white">
+                              Confirm & Save Step 2
+                            </Button>
+                          </div>
+                        </form>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Step 3 Form: Entrance Examination */}
+                  {selectedApp.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
+                    <Card variant="outlined" className="border-purple-200 bg-white shadow-sm">
+                      <CardContent className="p-5 space-y-4">
+                        <div className="flex items-center gap-2 text-purple-800 font-bold">
+                          <Icon name="event" size={20} />
+                          <h3>Step 3: Entrance Exam Score Log</h3>
+                        </div>
+                        <p className="text-xs text-slate-500">Log results and decide whether to shortlist the applicant.</p>
+
+                        <form onSubmit={handleSaveExam} className="space-y-4">
+                          <TextField
+                            label="Exam Date"
+                            type="date"
+                            value={examForm.examDate}
+                            onChange={(e) => setExamForm({ ...examForm, examDate: e.target.value })}
+                            required
+                          />
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <TextField
+                              label="Maximum Marks"
+                              type="number"
+                              value={String(examForm.maxMarks)}
+                              onChange={(e) => setExamForm({ ...examForm, maxMarks: Number(e.target.value) })}
+                              required
+                            />
+                            <TextField
+                              label="Marks Obtained"
+                              type="number"
+                              value={examForm.marksObtained}
+                              onChange={(e) => setExamForm({ ...examForm, marksObtained: e.target.value })}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Verdict</label>
+                              <Select
+                                value={examForm.verdict}
+                                onValueChange={(val: any) => setExamForm((prev) => ({ ...prev, verdict: val }))}
+                              >
+                                <SelectTrigger fullWidth>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="PENDING">Pending Verdict</SelectItem>
+                                  <SelectItem value="PASS">Pass (Approved)</SelectItem>
+                                  <SelectItem value="FAIL">Fail</SelectItem>
+                                  <SelectItem value="BORDERLINE">Borderline</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div>
+                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Advance Status</label>
+                              <Select
+                                value={examForm.applicationStatus}
+                                onValueChange={(val: any) => setExamForm({ ...examForm, applicationStatus: val })}
+                              >
+                                <SelectTrigger fullWidth>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="TEST_SCHEDULED">Keep in Examination</SelectItem>
+                                  <SelectItem value="SHORTLISTED">Promote to Shortlisted</SelectItem>
+                                  <SelectItem value="REJECTED">Reject Application</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <TextField
+                            label="Notes / Interview Summary"
+                            value={examForm.notes}
+                            onChange={(e) => setExamForm({ ...examForm, notes: e.target.value })}
+                          />
+
+                          <div className="pt-2 flex justify-end">
+                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-purple-600 hover:bg-purple-700 text-white">
+                              Confirm & Log Marks
+                            </Button>
+                          </div>
+                        </form>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Step 4 Form: Shortlist & Promote Bridge */}
+                  {selectedApp.status === "SHORTLISTED" && (
+                    <Card variant="outlined" className="border-teal-200 bg-white shadow-sm">
+                      <CardContent className="p-5 space-y-4">
+                        <div className="flex items-center gap-2 text-teal-800 font-bold">
+                          <Icon name="star" size={20} />
+                          <h3>Step 4: Promote Candidate to Active Student</h3>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          Promoting आरव creates their official SIS student profile, user account, and initial enrollment classes.
+                        </p>
+
+                        <form onSubmit={handlePromote} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Section Assignment</label>
+                              <Select
+                                value={promoteForm.sectionId}
+                                onValueChange={(val) => setPromoteForm({ ...promoteForm, sectionId: val })}
+                              >
+                                <SelectTrigger fullWidth>
+                                  <SelectValue placeholder="Select section" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {classSections.map((sec) => (
+                                    <SelectItem key={sec.id} value={sec.id}>
+                                      {sec.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <TextField
+                              label="Roll Number (Optional)"
+                              value={promoteForm.rollNo}
+                              onChange={(e) => setPromoteForm({ ...promoteForm, rollNo: e.target.value })}
+                            />
+                          </div>
+
+                          <TextField
+                            label="Admission Date"
+                            type="date"
+                            value={promoteForm.admissionDate}
+                            onChange={(e) => setPromoteForm({ ...promoteForm, admissionDate: e.target.value })}
+                            required
+                          />
+
+                          <h4 className="font-bold border-b pb-1 text-primary text-xs pt-2">Invoice Fee details</h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            <TextField
+                              label="Discount Percent (%)"
+                              type="number"
+                              value={String(promoteForm.discountPercent)}
+                              onChange={(e) => setPromoteForm({ ...promoteForm, discountPercent: Number(e.target.value) })}
+                            />
+                            <TextField
+                              label="Amount Collected (₹)"
+                              type="number"
+                              value={String(promoteForm.amountPaid)}
+                              onChange={(e) => setPromoteForm({ ...promoteForm, amountPaid: Number(e.target.value) })}
+                            />
+                          </div>
+
+                          {promoteForm.amountPaid > 0 && (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Payment Mode</label>
+                                <Select
+                                  value={promoteForm.paymentMethod}
+                                  onValueChange={(val: any) => setPromoteForm({ ...promoteForm, paymentMethod: val })}
+                                >
+                                  <SelectTrigger fullWidth>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="CASH">Cash</SelectItem>
+                                    <SelectItem value="UPI">UPI</SelectItem>
+                                    <SelectItem value="ONLINE">Online Netbanking</SelectItem>
+                                    <SelectItem value="CHEQUE">Cheque</SelectItem>
+                                    <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <TextField
+                                label="Transaction ID / Receipt No"
+                                value={promoteForm.transactionId}
+                                onChange={(e) => setPromoteForm({ ...promoteForm, transactionId: e.target.value })}
+                              />
+                            </div>
+                          )}
+
+                          <div className="pt-2 flex justify-end">
+                            <Button type="submit" loading={actionLoading} variant="filled" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                              Confirm Promotion & Admit Student
+                            </Button>
+                          </div>
+                        </form>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Step 5 View: Promoted (Active Student) */}
+                  {selectedApp.status === "ADMITTED" && (
+                    <Card variant="outlined" className="border-emerald-200 bg-emerald-50/30">
+                      <CardContent className="p-6 text-center space-y-4">
+                        <div className="mx-auto w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                          <Icon name="check_circle" size={32} />
+                        </div>
+                        <div>
+                          <h3 className="text-title-lg font-bold text-emerald-900">Enrolled Successfully!</h3>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {selectedApp.firstName} is now a registered student of Little Champ School.
+                          </p>
+                        </div>
+                        <div className="p-4 bg-white border border-emerald-100 rounded-2xl max-w-sm mx-auto text-left text-xs space-y-1.5 shadow-sm">
+                          <p><span className="font-semibold text-slate-500">Student Profile:</span> Active</p>
+                          <p><span className="font-semibold text-slate-500">Target Grade Class:</span> {selectedApp.class?.name || "N/A"}</p>
+                          <p><span className="font-semibold text-slate-500">Intake Application:</span> {selectedApp.applicationNo}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Rejected State Card */}
+                  {selectedApp.status === "REJECTED" && (
+                    <Card variant="outlined" className="border-red-200 bg-red-50/20">
+                      <CardContent className="p-6 text-center space-y-4">
+                        <div className="mx-auto w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                          <Icon name="cancel" size={32} />
+                        </div>
+                        <div>
+                          <h3 className="text-title-lg font-bold text-red-900">Application Rejected</h3>
+                          <p className="text-xs text-slate-500 mt-1">This application has been declined during processing.</p>
+                        </div>
+                        {selectedApp.verificationNotes && (
+                          <div className="p-3 bg-white border border-red-100 rounded-xl text-left text-xs text-slate-600 max-w-md mx-auto">
+                            <span className="font-bold text-red-800 block">Rejection Remarks:</span>
+                            {selectedApp.verificationNotes}
+                          </div>
+                        )}
+                        <Button
+                          variant="outlined"
+                          size="sm"
+                          className="border-red-200 text-red-700 bg-white"
+                          onClick={async () => {
+                            setActionLoading(true);
+                            try {
+                              const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/verify`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ applicationStatus: "SUBMITTED" }),
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                snackbar.show("Application reopened.", "success");
+                                handleOpenWorkspace(data.data);
+                                fetchDashboardData();
+                              }
+                            } catch {
+                              snackbar.show("Error reopening application.", "error");
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                        >
+                          Reopen & Reconsider Application
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── INTAKE FORMS MODALS ─────────────────────────────────────────── */}
+
+      {/* A. Inquiry Creation Modal */}
       <Dialog open={inquiryModalOpen} onOpenChange={setInquiryModalOpen}>
         <DialogContent className="max-w-xl">
-          <DialogTitle>Register New Inquiry</DialogTitle>
-          <DialogDescription>Log initial candidate counseling or walk-in records.</DialogDescription>
+          <DialogTitle>Register Counselor Inquiry</DialogTitle>
+          <DialogDescription>Log walk-in counseling or web inquiry prospect details.</DialogDescription>
 
           <form onSubmit={handleCreateInquiry} className="mt-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -1280,7 +1580,7 @@ export default function AdmissionsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Gender</label>
+                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Gender</label>
                 <Select value={inquiryForm.gender} onValueChange={(val) => setInquiryForm({ ...inquiryForm, gender: val })}>
                   <SelectTrigger fullWidth>
                     <SelectValue />
@@ -1294,13 +1594,13 @@ export default function AdmissionsPage() {
               </div>
 
               <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Applied Class</label>
+                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Grade Applied</label>
                 <Select
                   value={inquiryForm.classAppliedId}
                   onValueChange={(val) => setInquiryForm({ ...inquiryForm, classAppliedId: val })}
                 >
                   <SelectTrigger fullWidth>
-                    <SelectValue placeholder="Select Grade" />
+                    <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
                     {classes.map((c) => (
@@ -1337,7 +1637,7 @@ export default function AdmissionsPage() {
             </div>
 
             <TextField
-              label="Counselor Notes"
+              label="Notes"
               value={inquiryForm.notes}
               onChange={(e) => setInquiryForm({ ...inquiryForm, notes: e.target.value })}
             />
@@ -1346,24 +1646,24 @@ export default function AdmissionsPage() {
               <DialogClose asChild>
                 <Button variant="outlined">Cancel</Button>
               </DialogClose>
-              <Button type="submit" loading={actionLoading} variant="filled">
-                Save Inquiry
+              <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white">
+                Log Inquiry
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* 2. Application Modal */}
+      {/* B. Formal Application Submission Modal */}
       <Dialog open={applicationModalOpen} onOpenChange={setApplicationModalOpen}>
         <DialogContent className="max-w-2xl overflow-y-auto max-h-[85vh]">
-          <DialogTitle>New Admission Application</DialogTitle>
-          <DialogDescription>Submit complete student application form inputs.</DialogDescription>
+          <DialogTitle>Formal Intake Application</DialogTitle>
+          <DialogDescription>Submit complete candidate application form data.</DialogDescription>
 
           <form onSubmit={handleCreateApplication} className="mt-4 space-y-5">
-            <h4 className="font-bold border-b pb-1 text-primary text-body-md">1. Academic & Grade</h4>
+            <h4 className="font-bold border-b pb-1 text-primary text-xs">1. Applied Grade</h4>
             <div>
-              <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Target Grade</label>
+              <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Grade</label>
               <Select value={appForm.classId} onValueChange={(val) => setAppForm({ ...appForm, classId: val })}>
                 <SelectTrigger fullWidth>
                   <SelectValue placeholder="Select class" />
@@ -1378,7 +1678,7 @@ export default function AdmissionsPage() {
               </Select>
             </div>
 
-            <h4 className="font-bold border-b pb-1 text-primary text-body-md">2. Applicant Personal Details</h4>
+            <h4 className="font-bold border-b pb-1 text-primary text-xs">2. Applicant Details</h4>
             <div className="grid grid-cols-2 gap-4">
               <TextField
                 label="First Name"
@@ -1403,7 +1703,7 @@ export default function AdmissionsPage() {
                 required
               />
               <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Gender</label>
+                <label className="block text-label-sm text-on-surface-variant mb-1 font-semibold">Gender</label>
                 <Select value={appForm.gender} onValueChange={(val) => setAppForm({ ...appForm, gender: val })}>
                   <SelectTrigger fullWidth>
                     <SelectValue />
@@ -1439,13 +1739,13 @@ export default function AdmissionsPage() {
               />
             </div>
             <TextField
-              label="Emergency Phone Number"
+              label="Emergency Phone"
               value={appForm.emergencyContact}
               onChange={(e) => setAppForm({ ...appForm, emergencyContact: e.target.value })}
               required
             />
 
-            <h4 className="font-bold border-b pb-1 text-primary text-body-md">3. Parents Info</h4>
+            <h4 className="font-bold border-b pb-1 text-primary text-xs">3. Parents Info</h4>
             <div className="grid grid-cols-2 gap-4">
               <TextField
                 label="Father Name"
@@ -1475,493 +1775,11 @@ export default function AdmissionsPage() {
               <DialogClose asChild>
                 <Button variant="outlined">Cancel</Button>
               </DialogClose>
-              <Button type="submit" loading={actionLoading} variant="filled">
-                Save Application
+              <Button type="submit" loading={actionLoading} variant="filled" className="bg-primary text-white">
+                Submit Application
               </Button>
             </div>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* 3. Verify Documents Dialog */}
-      <Dialog open={verifyModalOpen} onOpenChange={setVerifyModalOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogTitle>Document Verification Checklist</DialogTitle>
-          <DialogDescription>
-            Verify applicant uploads one-by-one. Rejected documents require counselor follow-up.
-          </DialogDescription>
-
-          <form onSubmit={handleVerifyDocuments} className="mt-4 space-y-4">
-            {verifyForm.documents.length === 0 ? (
-              <div className="p-4 bg-slate-50 border rounded-xl flex flex-col items-center">
-                <p className="text-body-sm text-slate-500 mb-2">No documents have been uploaded for this candidate.</p>
-                <Button
-                  type="button"
-                  variant="outlined"
-                  size="sm"
-                  onClick={() => {
-                    // Create mock docs locally for clerk to check
-                    setVerifyForm((prev) => ({
-                      ...prev,
-                      documents: [
-                        { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate" },
-                        { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card" },
-                      ],
-                    }));
-                  }}
-                >
-                  Generate Verification Checklist
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                {verifyForm.documents.map((doc, idx) => (
-                  <div key={doc.id} className="p-3 border rounded-xl bg-slate-50 flex flex-col space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-body-sm text-slate-700">{doc.documentType}</span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant={doc.status === "VERIFIED" ? "filled" : "outlined"}
-                          className={`h-7 px-2.5 text-xs ${doc.status === "VERIFIED" ? "bg-emerald-600 text-white" : ""}`}
-                          onClick={() => {
-                            const clone = [...verifyForm.documents];
-                            clone[idx].status = "VERIFIED";
-                            setVerifyForm({ ...verifyForm, documents: clone });
-                          }}
-                        >
-                          Verify
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={doc.status === "REJECTED" ? "filled" : "outlined"}
-                          className={`h-7 px-2.5 text-xs ${doc.status === "REJECTED" ? "bg-red-600 text-white" : ""}`}
-                          onClick={() => {
-                            const clone = [...verifyForm.documents];
-                            clone[idx].status = "REJECTED";
-                            setVerifyForm({ ...verifyForm, documents: clone });
-                          }}
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    </div>
-                    <TextField
-                      label="Document Remarks"
-                      value={doc.remarks}
-                      onChange={(e) => {
-                        const clone = [...verifyForm.documents];
-                        clone[idx].remarks = e.target.value;
-                        setVerifyForm({ ...verifyForm, documents: clone });
-                      }}
-                      placeholder="e.g. Valid expiration date or blur remarks"
-                      className="h-10 mt-1"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <TextField
-              label="Verification Summary Notes"
-              value={verifyForm.verificationNotes}
-              onChange={(e) => setVerifyForm({ ...verifyForm, verificationNotes: e.target.value })}
-            />
-
-            <div>
-              <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Next Stage status</label>
-              <Select
-                value={verifyForm.nextStatus}
-                onValueChange={(val: any) => setVerifyForm({ ...verifyForm, nextStatus: val })}
-              >
-                <SelectTrigger fullWidth>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeBranch?.hasEntranceTest && (
-                    <SelectItem value="TEST_SCHEDULED">Entrance Examination Scheduled</SelectItem>
-                  )}
-                  <SelectItem value="SHORTLISTED">Direct Shortlist</SelectItem>
-                  <SelectItem value="DOCUMENT_VERIFICATION">Keep In Document Verification</SelectItem>
-                  <SelectItem value="REJECTED">Reject Application</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <DialogClose asChild>
-                <Button variant="outlined">Cancel</Button>
-              </DialogClose>
-              <Button type="submit" loading={actionLoading} variant="filled">
-                Save Verification
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* 4. Entrance Test Scheduling & Marks entry */}
-      <Dialog open={examModalOpen} onOpenChange={setExamModalOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogTitle>Entrance Exam Marks Log</DialogTitle>
-          <DialogDescription>Schedule candidate exams and enter obtained scores.</DialogDescription>
-
-          <form onSubmit={handleSaveExam} className="mt-4 space-y-4">
-            <TextField
-              label="Exam Date"
-              type="date"
-              value={examForm.examDate}
-              onChange={(e) => setExamForm({ ...examForm, examDate: e.target.value })}
-              required
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <TextField
-                label="Maximum Marks"
-                type="number"
-                value={String(examForm.maxMarks)}
-                onChange={(e) => setExamForm({ ...examForm, maxMarks: Number(e.target.value) })}
-                required
-              />
-              <TextField
-                label="Marks Obtained"
-                type="number"
-                value={examForm.marksObtained}
-                onChange={(e) => setExamForm({ ...examForm, marksObtained: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Verdict</label>
-                <Select
-                  value={examForm.verdict}
-                  onValueChange={(val: any) => setExamForm((prev) => ({ ...prev, verdict: val }))}
-                >
-                  <SelectTrigger fullWidth>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PENDING">Pending (Scheduled)</SelectItem>
-                    <SelectItem value="PASS">Pass (Eligible)</SelectItem>
-                    <SelectItem value="FAIL">Fail</SelectItem>
-                    <SelectItem value="BORDERLINE">Borderline</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Pipeline Status</label>
-                <Select
-                  value={examForm.applicationStatus}
-                  onValueChange={(val: any) => setExamForm({ ...examForm, applicationStatus: val })}
-                >
-                  <SelectTrigger fullWidth>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TEST_SCHEDULED">Keep In Testing stage</SelectItem>
-                    <SelectItem value="SHORTLISTED">Shortlist (Pass & Move Forward)</SelectItem>
-                    <SelectItem value="REJECTED">Reject Application</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <TextField
-              label="Entrance Exam Notes"
-              value={examForm.notes}
-              onChange={(e) => setExamForm({ ...examForm, notes: e.target.value })}
-            />
-
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <DialogClose asChild>
-                <Button variant="outlined">Cancel</Button>
-              </DialogClose>
-              <Button type="submit" loading={actionLoading} variant="filled">
-                Save Exam Result
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* 5. Promote Candidate Dialog */}
-      <Dialog open={promoteModalOpen} onOpenChange={setPromoteModalOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogTitle>Promote Candidate to Student</DialogTitle>
-          <DialogDescription>
-            This executes a transaction provisioning a student, user, and invoice.
-          </DialogDescription>
-
-          <form onSubmit={handlePromote} className="mt-4 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Assigned Section</label>
-                <Select
-                  value={promoteForm.sectionId}
-                  onValueChange={(val) => setPromoteForm({ ...promoteForm, sectionId: val })}
-                >
-                  <SelectTrigger fullWidth>
-                    <SelectValue placeholder="Select section" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classSections.map((sec) => (
-                      <SelectItem key={sec.id} value={sec.id}>
-                        {sec.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <TextField
-                label="Roll Number (Optional)"
-                value={promoteForm.rollNo}
-                onChange={(e) => setPromoteForm({ ...promoteForm, rollNo: e.target.value })}
-              />
-            </div>
-
-            <TextField
-              label="Admission Date"
-              type="date"
-              value={promoteForm.admissionDate}
-              onChange={(e) => setPromoteForm({ ...promoteForm, admissionDate: e.target.value })}
-              required
-            />
-
-            <h4 className="font-bold border-b pb-1 text-primary text-body-sm pt-2">Initial Fees Invoice & Collection</h4>
-
-            <div className="grid grid-cols-2 gap-4">
-              <TextField
-                label="Discount Percent (%)"
-                type="number"
-                value={String(promoteForm.discountPercent)}
-                onChange={(e) => setPromoteForm({ ...promoteForm, discountPercent: Number(e.target.value) })}
-              />
-              <TextField
-                label="Amount Paid Now (₹)"
-                type="number"
-                value={String(promoteForm.amountPaid)}
-                onChange={(e) => setPromoteForm({ ...promoteForm, amountPaid: Number(e.target.value) })}
-              />
-            </div>
-
-            {promoteForm.amountPaid > 0 && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Payment Mode</label>
-                  <Select
-                    value={promoteForm.paymentMethod}
-                    onValueChange={(val: any) => setPromoteForm({ ...promoteForm, paymentMethod: val })}
-                  >
-                    <SelectTrigger fullWidth>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CASH">Cash</SelectItem>
-                      <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="ONLINE">Online Netbanking</SelectItem>
-                      <SelectItem value="CHEQUE">Cheque</SelectItem>
-                      <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <TextField
-                  label="Transaction ID / Receipt No"
-                  value={promoteForm.transactionId}
-                  onChange={(e) => setPromoteForm({ ...promoteForm, transactionId: e.target.value })}
-                />
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <DialogClose asChild>
-                <Button variant="outlined">Cancel</Button>
-              </DialogClose>
-              <Button type="submit" loading={actionLoading} variant="filled" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                Admit Student
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* 6. Candidate Detail Overview Dialog */}
-      <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
-        <DialogContent className="max-w-2xl overflow-y-auto max-h-[85vh]">
-          {selectedApp && (
-            <>
-              <DialogTitle>Candidate Detail Overview</DialogTitle>
-              <DialogDescription>Pipeline Application Summary for counseling audits.</DialogDescription>
-
-              <div className="mt-4 space-y-6">
-                {/* Profile card summary */}
-                <div className="p-4 bg-slate-50 border rounded-2xl flex items-center justify-between">
-                  <div>
-                    <h3 className="text-headline-sm font-semibold text-on-surface">
-                      {selectedApp.firstName} {selectedApp.lastName}
-                    </h3>
-                    <p className="text-body-sm text-slate-500 font-medium">
-                      App Number: {selectedApp.applicationNo} | Class: {selectedApp.class?.name || "N/A"}
-                    </p>
-                  </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-primary text-white">
-                    {selectedApp.status}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                  {/* Personal */}
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-body-md text-primary border-b pb-1">Personal Details</h4>
-                    <div className="text-body-sm space-y-1">
-                      <p><span className="font-medium text-slate-500">Gender:</span> {selectedApp.gender}</p>
-                      <p><span className="font-medium text-slate-500">Date of Birth:</span> {new Date(selectedApp.dateOfBirth).toLocaleDateString("en-IN")}</p>
-                      <p><span className="font-medium text-slate-500">Pincode:</span> {selectedApp.pincode}</p>
-                      <p><span className="font-medium text-slate-500">Address:</span> {selectedApp.address}</p>
-                    </div>
-                  </div>
-
-                  {/* Parents */}
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-body-md text-primary border-b pb-1">Parent Details</h4>
-                    <div className="text-body-sm space-y-1">
-                      <p><span className="font-medium text-slate-500">Father Name:</span> {selectedApp.fatherName || "—"}</p>
-                      <p><span className="font-medium text-slate-500">Father Phone:</span> {selectedApp.fatherPhone || "—"}</p>
-                      <p><span className="font-medium text-slate-500">Mother Name:</span> {selectedApp.motherName || "—"}</p>
-                      <p><span className="font-medium text-slate-500">Mother Phone:</span> {selectedApp.motherPhone || "—"}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Docs Checklist list */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-body-md text-primary border-b pb-1">Uploaded Document Verification</h4>
-                  {(!selectedApp.documents || selectedApp.documents.length === 0) ? (
-                    <div className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
-                      <p className="text-body-sm text-slate-400 italic">No checklist documents available.</p>
-                      <Button
-                        type="button"
-                        variant="outlined"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedApp((prev) => {
-                            if (!prev) return null;
-                            return {
-                              ...prev,
-                              documents: [
-                                { id: "mock-dob", status: "PENDING", remarks: "", documentType: "Birth Certificate", fileName: "birth.pdf", filePath: "/uploads/birth.pdf" },
-                                { id: "mock-id", status: "PENDING", remarks: "", documentType: "Aadhaar Card", fileName: "aadhaar.pdf", filePath: "/uploads/aadhaar.pdf" },
-                              ] as Document[],
-                            };
-                          });
-                        }}
-                      >
-                        Generate Verification Checklist
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedApp.documents.map((doc) => (
-                        <div key={doc.id} className="p-3 border rounded-xl bg-white flex items-center justify-between">
-                          <div>
-                            <span className="font-semibold text-body-sm">{doc.documentType}</span>
-                            <span className="text-xs text-slate-400 block">{doc.fileName}</span>
-                          </div>
-                          <span
-                            className={`px-2.5 py-0.5 rounded text-xs font-bold ${
-                              doc.status === "VERIFIED"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : doc.status === "REJECTED"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-amber-100 text-amber-800"
-                            }`}
-                          >
-                            {doc.status}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Exam logs */}
-                {selectedApp.examResult && (
-                  <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-xl space-y-2">
-                    <h4 className="font-bold text-body-md text-purple-800">Entrance Test & Interview Logs</h4>
-                    <div className="text-body-sm grid grid-cols-3 gap-2">
-                      <p><span className="font-medium text-slate-500">Exam Date:</span> {new Date(selectedApp.examResult.examDate).toLocaleDateString("en-IN")}</p>
-                      <p><span className="font-medium text-slate-500">Obtained:</span> {selectedApp.examResult.marksObtained !== null ? `${selectedApp.examResult.marksObtained}/${selectedApp.examResult.maxMarks}` : "Not Graded"}</p>
-                      <p><span className="font-medium text-slate-500">Verdict:</span> {selectedApp.examResult.verdict}</p>
-                    </div>
-                    {selectedApp.examResult.notes && (
-                      <p className="text-xs text-slate-500 bg-white p-2 rounded border mt-1">
-                        <span className="font-semibold text-purple-700">Examiner Notes:</span> {selectedApp.examResult.notes}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Actions inside Detail panel */}
-                <div className="flex justify-end gap-3 pt-4 border-t">
-                  <DialogClose asChild>
-                    <Button variant="outlined">Close</Button>
-                  </DialogClose>
-                  {selectedApp.status === "SUBMITTED" && (
-                    <Button
-                      variant="filled"
-                      icon="check_circle"
-                      onClick={() => {
-                        setDetailsModalOpen(false);
-                        openVerifyModal(selectedApp);
-                      }}
-                    >
-                      Verify Documents
-                    </Button>
-                  )}
-                  {selectedApp.status === "DOCUMENT_VERIFICATION" && (
-                    <Button
-                      variant="filled"
-                      icon="check_circle"
-                      onClick={() => {
-                        setDetailsModalOpen(false);
-                        openVerifyModal(selectedApp);
-                      }}
-                    >
-                      Verify Docs
-                    </Button>
-                  )}
-                  {selectedApp.status === "TEST_SCHEDULED" && activeBranch?.hasEntranceTest && (
-                    <Button
-                      variant="filled"
-                      icon="event"
-                      className="bg-purple-600 hover:bg-purple-700 text-white"
-                      onClick={() => {
-                        setDetailsModalOpen(false);
-                        openExamModal(selectedApp);
-                      }}
-                    >
-                      Enter Test Marks
-                    </Button>
-                  )}
-                  {selectedApp.status === "SHORTLISTED" && (
-                    <Button
-                      variant="filled"
-                      icon="school"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={() => {
-                        setDetailsModalOpen(false);
-                        openPromoteModal(selectedApp);
-                      }}
-                    >
-                      Promote Candidate
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
         </DialogContent>
       </Dialog>
     </div>
