@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Divider } from "@/components/ui/divider";
+import { Icon } from "@/components/ui/icon";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { useBranches } from "@/hooks/use-branches";
 import {
@@ -406,6 +407,58 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
         setLoading(false);
       }
     }
+  }
+
+  if (mode === "create" && !branchesLoading && branches.length === 0) {
+    return (
+      <Card variant="outlined" className="mx-auto max-w-2xl border-red-500/20 bg-red-500/5">
+        <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500 shadow-sm shadow-red-500/10">
+            <Icon name="warning" size={24} />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-headline-sm font-black text-on-surface">Campus Branch Configuration Required</h2>
+            <p className="text-body-md text-on-surface-variant/80 max-w-md">
+              To enroll students, your organization must first configure at least one active Campus Branch.
+            </p>
+          </div>
+          <Button
+            variant="tonal"
+            icon="domain"
+            onClick={() => router.push("/branches")}
+            className="hover:scale-[1.02] transition-all duration-200"
+          >
+            Configure Branches
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (mode === "create" && branchId && !classesLoading && classes.length === 0) {
+    return (
+      <Card variant="outlined" className="mx-auto max-w-2xl border-red-500/20 bg-red-500/5">
+        <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500 shadow-sm shadow-red-500/10">
+            <Icon name="warning" size={24} />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-headline-sm font-black text-on-surface">Classes & Divisions Required</h2>
+            <p className="text-body-md text-on-surface-variant/80 max-w-md">
+              No classes are configured for the selected branch. You must create classes and divisions before enrolling students.
+            </p>
+          </div>
+          <Button
+            variant="tonal"
+            icon="class"
+            onClick={() => router.push("/classes")}
+            className="hover:scale-[1.02] transition-all duration-200"
+          >
+            Configure Classes & Divisions
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

@@ -20,7 +20,7 @@ export const SelectTrigger = forwardRef<
     ref={ref}
     className={cn(
       "inline-flex items-center justify-between gap-2",
-      "h-11 rounded-xl px-4",
+      "h-11 rounded-xl px-4 cursor-pointer",
       "border-2 border-slate-200 bg-white text-slate-700 text-sm font-medium transition-all duration-300",
       "hover:border-primary/50 hover:bg-slate-50",
       "focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary",

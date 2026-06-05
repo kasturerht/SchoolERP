@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Avatar from "@radix-ui/react-avatar";
 import { Icon } from "@/components/ui/icon";
@@ -22,6 +23,8 @@ function getInitials(name: string): string {
 }
 
 export function UserMenu({ name, email, image }: UserMenuProps) {
+  const router = useRouter();
+
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger
@@ -62,9 +65,7 @@ export function UserMenu({ name, email, image }: UserMenuProps) {
                 "state-layer focus-ring flex cursor-pointer items-center gap-3 rounded-xs px-3 py-2 text-body-md text-on-surface outline-none after:bg-on-surface",
                 "data-[highlighted]:bg-on-surface/8"
               )}
-              onSelect={() => {
-                // Profile navigation — placeholder for future route
-              }}
+              onSelect={() => router.push("/profile")}
             >
               <Icon name="person" size={20} className="text-on-surface-variant" />
               Profile

@@ -485,6 +485,84 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     }
   }
 
+  if (mode === "create" && !academicYearsLoading && academicYears.length === 0) {
+    return (
+      <Card variant="outlined" className="mx-auto max-w-2xl border-red-500/20 bg-red-500/5">
+        <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500 shadow-sm shadow-red-500/10">
+            <Icon name="warning" size={24} />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-headline-sm font-black text-on-surface">Academic Year Configuration Required</h2>
+            <p className="text-body-md text-on-surface-variant/80 max-w-md">
+              To define classes, standards, and divisions, you must first configure at least one active Academic Year.
+            </p>
+          </div>
+          <Button
+            variant="tonal"
+            icon="date_range"
+            onClick={() => router.push("/academic-years")}
+            className="hover:scale-[1.02] transition-all duration-200"
+          >
+            Configure Academic Year
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (mode === "create" && !branchesLoading && branches.length === 0) {
+    return (
+      <Card variant="outlined" className="mx-auto max-w-2xl border-red-500/20 bg-red-500/5">
+        <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500 shadow-sm shadow-red-500/10">
+            <Icon name="warning" size={24} />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-headline-sm font-black text-on-surface">Campus Branch Configuration Required</h2>
+            <p className="text-body-md text-on-surface-variant/80 max-w-md">
+              To define classes and schedule courses, you must first configure at least one physical Campus Branch.
+            </p>
+          </div>
+          <Button
+            variant="tonal"
+            icon="domain"
+            onClick={() => router.push("/branches")}
+            className="hover:scale-[1.02] transition-all duration-200"
+          >
+            Configure Branches
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (mode === "create" && branchId && !teachersLoading && teachers.length === 0) {
+    return (
+      <Card variant="outlined" className="mx-auto max-w-2xl border-red-500/20 bg-red-500/5">
+        <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-500 shadow-sm shadow-red-500/10">
+            <Icon name="warning" size={24} />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-headline-sm font-black text-on-surface">Faculty & Staff Setup Required</h2>
+            <p className="text-body-md text-on-surface-variant/80 max-w-md">
+              To configure class divisions, you must first register teachers and faculty members who will be assigned to them.
+            </p>
+          </div>
+          <Button
+            variant="tonal"
+            icon="group"
+            onClick={() => router.push("/staff")}
+            className="hover:scale-[1.02] transition-all duration-200"
+          >
+            Register Faculty & Staff
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
       <Card variant="outlined">

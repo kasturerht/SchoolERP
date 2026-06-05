@@ -166,8 +166,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           >
             <legend
               className={cn(
-                "h-0 overflow-hidden text-[12px] leading-[0] transition-all duration-200",
-                isFloating ? "max-w-full px-1" : "max-w-0 px-0"
+                "block float-none overflow-hidden invisible text-[12px] leading-none transition-all duration-200",
+                isFloating ? "max-w-full px-1.5 h-3" : "max-w-[0.01px] px-0 h-0"
               )}
             >
               <span className="opacity-0">
@@ -194,10 +194,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
                 "absolute transition-all duration-200 pointer-events-none z-10",
                 labelColor,
                 isFloating
-                  ? cn(
-                      "top-[-9px] text-[12px] leading-4",
-                      leadingIcon ? "-left-6" : "left-1"
-                    )
+                  ? "top-[-9px] text-[12px] leading-4 left-1 px-1 bg-surface-container-lowest"
                   : cn(
                       "top-1/2 -translate-y-1/2 text-[16px] leading-6",
                       leadingIcon ? "left-2" : "left-4"

@@ -190,6 +190,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Verify class exists and belongs to this branch/organization (if provided)
+    if (data.classId) {
+      const cls = await prisma.class.findFirst({
+        where: { id: data.classId, branchId: data.branchId },
+      });
+      if (!cls) {
+        return apiError("NOT_FOUND", "Class not found for this branch", 404);
+      }
+    }
     // Auto-generate admissionNo
     const admissionNo = `ADM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 

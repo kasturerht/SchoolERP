@@ -112,6 +112,33 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const { name, numericGrade, subjects, sections, fees } = parsed.data;
 
+    // Verify all staff IDs assigned as teachers belong to organization
+    if (sections !== undefined) {
+      const staffIdsToVerify = new Set<string>();
+      for (const sec of sections) {
+        if (sec.classTeacherId) staffIdsToVerify.add(sec.classTeacherId);
+        for (const st of sec.subjectTeachers) {
+          if (st.staffId) staffIdsToVerify.add(st.staffId);
+        }
+      }
+
+      if (staffIdsToVerify.size > 0) {
+        const verifiedStaffCount = await prisma.staff.count({
+          where: {
+            id: { in: Array.from(staffIdsToVerify) },
+            branch: { organizationId: ctx.organizationId },
+          },
+        });
+        if (verifiedStaffCount !== staffIdsToVerify.size) {
+          return apiError(
+            "FORBIDDEN",
+            "One or more assigned staff members do not belong to your organization",
+            403
+          );
+        }
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       // Update basic class fields
       const data: Record<string, unknown> = {};

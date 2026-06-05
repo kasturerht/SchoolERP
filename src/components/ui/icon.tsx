@@ -51,7 +51,14 @@ import {
   Receipt,
   ClipboardSignature,
   Cpu,
-  Sparkles
+  Sparkles,
+  Shield,
+  Palette,
+  Send,
+  History,
+  Megaphone,
+  PartyPopper,
+  BarChart3
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -121,6 +128,16 @@ const iconMap: Record<string, LucideIcon> = {
   app_registration: ClipboardSignature,
   cpu: Cpu,
   sparkles: Sparkles,
+  verified_user: ShieldCheck,
+  palette: Palette,
+  vpn_key: Key,
+  send: Send,
+  shield: Shield,
+  history: History,
+  verified: CheckCircle,
+  campaign: Megaphone,
+  celebration: PartyPopper,
+  analytics: BarChart3,
 };
 
 export function Icon({
@@ -130,7 +147,14 @@ export function Icon({
   className,
   ...props
 }: IconProps) {
-  const LucideComponent = iconMap[name] || CircleDashed;
+  const LucideComponent = iconMap[name];
+
+  if (!LucideComponent) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(`[Icon] Missing mapping for icon name: "${name}"`);
+    }
+    return null;
+  }
 
   return (
     <span

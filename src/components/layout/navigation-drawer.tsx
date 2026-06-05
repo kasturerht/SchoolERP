@@ -28,12 +28,12 @@ function DrawerContent({
       )}
     >
       {/* Header */}
-      <div className="flex flex-col gap-1 px-6 py-8 border-b border-slate-200/60 bg-white">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-on-primary shadow-md shadow-primary/20">
+      <div className="flex h-20 items-center px-6 border-b border-slate-200/60 bg-white">
+        <div className="flex items-center gap-3 w-full">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary shadow-md shadow-primary/20">
             <Icon name="school" size={22} />
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-0">
             <span className="truncate text-[15px] font-black text-slate-900 leading-tight tracking-tight">
               {orgName}
             </span>

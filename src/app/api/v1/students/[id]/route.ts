@@ -262,8 +262,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         where: { id: sectionId },
         include: { class: true },
       });
-      if (!section) {
-        return apiError("NOT_FOUND", "Section not found", 404);
+      const targetBranchId = branchId || existing.branchId;
+      if (!section || section.class.branchId !== targetBranchId) {
+        return apiError("NOT_FOUND", "Section not found for this branch", 404);
       }
 
       const latestEnrollment = await prisma.studentEnrollment.findFirst({

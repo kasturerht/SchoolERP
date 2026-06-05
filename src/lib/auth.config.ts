@@ -48,9 +48,26 @@ export const authConfig: NextAuthConfig = {
     },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isAuthPage = ["/login", "/register", "/forgot-password"].includes(
-        nextUrl.pathname
-      );
+      const { pathname } = nextUrl;
+
+      // Bypass auth checks for Next.js internal paths, APIs, assets, and public marketing pages
+      if (
+        pathname.startsWith("/_") ||
+        pathname.startsWith("/api") ||
+        pathname.startsWith("/assets") ||
+        pathname === "/favicon.ico" ||
+        pathname === "/" ||
+        pathname === "/pricing"
+      ) {
+        return true;
+      }
+
+      const isAuthPage = [
+        "/login",
+        "/register",
+        "/forgot-password",
+        "/reset-password",
+      ].includes(pathname);
 
       if (isAuthPage) {
         if (isLoggedIn) return Response.redirect(new URL("/dashboard", nextUrl));
