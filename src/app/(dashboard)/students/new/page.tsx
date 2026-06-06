@@ -18,9 +18,9 @@ export default function NewStudentPage() {
       <div className="bg-amber-50 border border-amber-200/60 rounded-2xl p-4 flex gap-3 text-amber-800 text-body-sm mb-6 items-start shadow-sm shadow-amber-50">
         <span className="material-symbols-outlined text-amber-600 shrink-0 select-none">warning</span>
         <div>
-          <p className="font-bold">डेटा मायग्रेशन / थेट प्रवेश मोड (Data Migration Mode)</p>
+          <p className="font-bold">Data Migration / Direct Intake Mode</p>
           <p className="text-xs text-amber-700/90 mt-0.5">
-            या फॉर्मचा वापर केवळ शाळेतील विद्यमान जुन्या विद्यार्थ्यांचा डेटा लोड करण्यासाठी किंवा थेट मधल्या वर्षात बदली (Transfer Intake) झालेल्या विद्यार्थ्यांसाठीच करा. नवीन शैक्षणिक वर्षातील सर्व नियमित प्रवेश केवळ <strong>Admissions Desk</strong> द्वारे केले जाणे बंधनकारक आहे.
+            Use this form only to load existing old student data for the school or for students transferred mid-year (Transfer Intake). All regular admissions for the new academic year must be processed through the <strong>Admissions Desk</strong>.
           </p>
         </div>
       </div>

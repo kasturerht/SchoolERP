@@ -97,11 +97,11 @@ export default function LeavingCertificatePrintPage() {
           setStudent(studentData.data);
           setLc(lcData.data);
         } else {
-          snackbar.show(lcData.error?.message ?? "शाला सोडल्याचा दाखला अद्याप जारी केलेला नाही.", "error");
+          snackbar.show(lcData.error?.message ?? "Leaving Certificate has not been issued yet.", "error");
           router.push(`/students/${params.id}`);
         }
       } catch {
-        snackbar.show("माहिती लोड करण्यात अडचण आली.", "error");
+        snackbar.show("Failed to load certificate data.", "error");
         router.push(`/students/${params.id}`);
       } finally {
         setLoading(false);
@@ -125,7 +125,7 @@ export default function LeavingCertificatePrintPage() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center font-semibold text-slate-500">
         <Icon name="progress_activity" className="animate-spin text-primary mr-2" size={24} />
-        दाखला लोड होत आहे...
+        Loading Certificate...
       </div>
     );
   }
@@ -173,7 +173,7 @@ export default function LeavingCertificatePrintPage() {
               Affiliated to CBSE / State Board | School ERP System
             </p>
             <h2 className="text-lg font-bold text-slate-800 border border-slate-800 px-6 py-1 inline-block bg-slate-50 rounded mt-2 uppercase">
-              शाला सोडल्याचा दाखला / LEAVING CERTIFICATE
+              LEAVING CERTIFICATE
             </h2>
           </div>
 
@@ -187,89 +187,89 @@ export default function LeavingCertificatePrintPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pt-2 text-sm text-slate-700">
             
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Admission No. (नोंदणी क्रमांक):</span>
+              <span>Admission No.:</span>
               <strong className="text-slate-900 font-mono">{student.admissionNo}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Roll No. (हाजिरी क्रमांक):</span>
+              <span>Roll No.:</span>
               <strong className="text-slate-900 font-mono">{student.rollNo || "—"}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between md:col-span-2">
-              <span>Student's Full Name (विद्यार्थ्याचे पूर्ण नाव):</span>
+              <span>Student's Full Name:</span>
               <strong className="text-slate-900">{student.firstName} {student.lastName}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Father's Name (वडिलांचे नाव):</span>
+              <span>Father's Name:</span>
               <strong className="text-slate-900">{student.fatherName || "—"}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Mother's Name (आईचे नाव):</span>
+              <span>Mother's Name:</span>
               <strong className="text-slate-900">{student.motherName || "—"}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between md:col-span-2">
-              <span>Date of Birth (जन्म तारीख अंकामध्ये):</span>
+              <span>Date of Birth (in figures):</span>
               <strong className="text-slate-900 font-mono">
                 {new Date(student.dateOfBirth).toLocaleDateString("en-IN")}
               </strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between md:col-span-2">
-              <span>Date of Birth in Words (जन्म तारीख अक्षरामध्ये):</span>
+              <span>Date of Birth (in words):</span>
               <strong className="text-slate-900 italic">{getDobInWords(student.dateOfBirth)}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Category / Caste (प्रवर्ग / जात):</span>
+              <span>Category / Caste:</span>
               <strong className="text-slate-900">{student.category}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Gender (लिंग):</span>
+              <span>Gender:</span>
               <strong className="text-slate-900 capitalize">{student.gender.toLowerCase()}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between md:col-span-2">
-              <span>Previous School Attended (मागील शाळा):</span>
+              <span>Previous School Attended:</span>
               <strong className="text-slate-900">{student.previousSchool || "—"}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Date of Admission (प्रवेश तारीख):</span>
+              <span>Date of Admission:</span>
               <strong className="text-slate-900">
                 {new Date(student.admissionDate).toLocaleDateString("en-IN")}
               </strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Class last studied (मागील वर्ग):</span>
+              <span>Class Last Studied:</span>
               <strong className="text-slate-900">{currentClass} {currentSection}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Date of Leaving School (शाळा सोडलेली तारीख):</span>
+              <span>Date of Leaving School:</span>
               <strong className="text-slate-900 font-semibold">
                 {new Date(lc.leavingDate).toLocaleDateString("en-IN")}
               </strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between">
-              <span>Conduct / Character (वर्तन):</span>
+              <span>Conduct / Character:</span>
               <strong className="text-slate-900">{lc.conduct}</strong>
             </div>
 
             <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between md:col-span-2">
-              <span>Reason for Leaving School (शाळा सोडण्याचे कारण):</span>
+              <span>Reason for Leaving School:</span>
               <strong className="text-slate-900">{lc.reasonForLeaving}</strong>
             </div>
 
             {lc.remarks && (
               <div className="border-b border-dashed border-slate-300 pb-1.5 flex justify-between md:col-span-2">
-                <span>Remarks (शेरा):</span>
+                <span>Remarks:</span>
                 <strong className="text-slate-900 italic">{lc.remarks}</strong>
               </div>
             )}

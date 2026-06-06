@@ -569,16 +569,16 @@ export default function AdmissionsPage() {
   // Demo Sandbox Pipeline Generator
   const handleGenerateDemoData = async () => {
     if (classes.length === 0) {
-      snackbar.show("कृपया आधी Classes तयार करा, जेणेकरून डमी डेटा तयार करता येईल.", "warning");
+      snackbar.show("Please create Classes first, so that dummy data can be generated.", "warning");
       return;
     }
     if (!branchFilter || !activeAcademicYearId) {
-      snackbar.show("Branch किंवा Academic Year कॉन्फिगरेशन सापडले नाही.", "error");
+      snackbar.show("Branch or Academic Year configuration not found.", "error");
       return;
     }
 
     setIsGeneratingDemo(true);
-    snackbar.show("डमी डेटा पाईपलाईन तयार होत आहे...", "info");
+    snackbar.show("Generating dummy data pipeline...", "info");
 
     try {
       const targetClassId = classes[0].id;
@@ -767,11 +767,11 @@ export default function AdmissionsPage() {
         });
       }
 
-      snackbar.show("डमी पाईपलाईन यशस्वीरित्या तयार झाली आहे!", "success");
+      snackbar.show("Dummy pipeline created successfully!", "success");
       await fetchDashboardData();
     } catch (err) {
       console.error(err);
-      snackbar.show("डमी डेटा तयार करताना त्रुटी आली.", "error");
+      snackbar.show("Error creating dummy data.", "error");
     } finally {
       setIsGeneratingDemo(false);
     }

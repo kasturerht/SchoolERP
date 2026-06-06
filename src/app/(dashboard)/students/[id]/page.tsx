@@ -771,20 +771,20 @@ export default function StudentProfilePage() {
                 {loadingAcademics ? (
                   <div className="p-12 text-center text-on-surface-variant">
                     <Icon name="progress_activity" className="animate-spin text-primary" size={32} />
-                    <p className="text-body-sm mt-2 font-medium">गुणतक्ता लोड होत आहे...</p>
+                    <p className="text-body-sm mt-2 font-medium">Loading report card...</p>
                   </div>
                 ) : !academics || academics.exams.length === 0 ? (
                   <Card className="border border-outline-variant/60 bg-surface-container-lowest p-12 rounded-2xl text-center">
                     <CardContent className="p-0 flex flex-col items-center max-w-sm mx-auto space-y-4">
-                      <div className="p-4 bg-slate-50 text-slate-400 rounded-2xl">
+                       <div className="p-4 bg-slate-50 text-slate-400 rounded-2xl">
                         <Icon name="school" size={40} />
                       </div>
                       <div className="space-y-1">
-                        <h3 className="text-title-md font-bold text-on-surface">शैक्षणिक रेकॉर्ड्स उपलब्ध नाहीत</h3>
+                        <h3 className="text-title-md font-bold text-on-surface">No Academic Records</h3>
                         <p className="text-body-sm text-on-surface-variant font-medium">No Academic Records Found</p>
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed">
-                        या विद्यार्थ्यासाठी अद्याप कोणत्याही परीक्षांचे गुण नोंदवले गेलेले नाहीत.
+                        No examination marks have been recorded for this student yet.
                       </p>
                     </CardContent>
                   </Card>
@@ -797,7 +797,7 @@ export default function StudentProfilePage() {
                           <Icon name="analytics" size={20} />
                         </div>
                         <div>
-                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">सरासरी गुण (Average Score)</div>
+                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">Average Score</div>
                           <div className="text-title-lg font-black text-on-surface mt-0.5">{academics.averageScore}%</div>
                         </div>
                       </div>
@@ -806,7 +806,7 @@ export default function StudentProfilePage() {
                           <Icon name="verified" size={20} />
                         </div>
                         <div>
-                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">उत्तीर्ण प्रमाण (Passing Rate)</div>
+                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">Passing Rate</div>
                           <div className="text-title-lg font-black text-on-surface mt-0.5">{academics.passRate}%</div>
                         </div>
                       </div>
@@ -815,7 +815,7 @@ export default function StudentProfilePage() {
                           <Icon name="assignment" size={20} />
                         </div>
                         <div>
-                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">एकूण परीक्षा (Total Exams)</div>
+                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">Total Exams</div>
                           <div className="text-title-lg font-black text-on-surface mt-0.5">{academics.totalExams}</div>
                         </div>
                       </div>
@@ -921,7 +921,7 @@ export default function StudentProfilePage() {
                 {loadingFees ? (
                   <div className="p-12 text-center text-on-surface-variant">
                     <Icon name="progress_activity" className="animate-spin text-primary" size={32} />
-                    <p className="text-body-sm mt-2 font-medium">आर्थिक तपशील लोड होत आहेत...</p>
+                    <p className="text-body-sm mt-2 font-medium">Loading financial records...</p>
                   </div>
                 ) : !fees ? (
                   <div className="text-center p-6 text-on-surface-variant">Failed to load financial records.</div>
@@ -934,7 +934,7 @@ export default function StudentProfilePage() {
                           <Icon name="account_balance_wallet" size={20} />
                         </div>
                         <div>
-                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">एकूण बिल (Total Billed)</div>
+                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">Total Billed</div>
                           <div className="text-title-lg font-black text-on-surface mt-0.5">₹{fees.totalBilled.toLocaleString("en-IN")}</div>
                         </div>
                       </div>
@@ -943,7 +943,7 @@ export default function StudentProfilePage() {
                           <Icon name="payments" size={20} />
                         </div>
                         <div>
-                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">भरलेली फी (Total Paid)</div>
+                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">Total Paid</div>
                           <div className="text-title-lg font-black text-on-surface mt-0.5">₹{fees.totalPaid.toLocaleString("en-IN")}</div>
                         </div>
                       </div>
@@ -952,7 +952,7 @@ export default function StudentProfilePage() {
                           <Icon name="pending_actions" size={20} />
                         </div>
                         <div>
-                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">बाकी रक्कम (Remaining Dues)</div>
+                          <div className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">Remaining Dues</div>
                           <div className={`text-title-lg font-black mt-0.5 ${fees.totalPending > 0 ? "text-rose-600 animate-pulse" : "text-on-surface"}`}>
                             ₹{fees.totalPending.toLocaleString("en-IN")}
                           </div>
@@ -965,12 +965,12 @@ export default function StudentProfilePage() {
                       <div className="lg:col-span-7 space-y-4">
                         <h3 className="text-title-md font-bold text-on-surface flex items-center gap-2 pl-1">
                           <Icon name="receipt" size={18} className="text-slate-500" />
-                          फी इनव्हॉइसेस (Fee Invoices)
+                          Fee Invoices
                         </h3>
 
                         {fees.invoices.length === 0 ? (
                           <div className="text-center p-8 bg-slate-50 border border-dashed rounded-xl text-on-surface-variant text-xs">
-                            कोणतेही इनव्हॉइस आढळले नाही.
+                            No invoices found.
                           </div>
                         ) : (
                           fees.invoices.map((inv: any) => (
@@ -1024,12 +1024,12 @@ export default function StudentProfilePage() {
                       <div className="lg:col-span-5 space-y-4">
                         <h3 className="text-title-md font-bold text-on-surface flex items-center gap-2 pl-1">
                           <Icon name="history" size={18} className="text-slate-500" />
-                          भरणा पावती (Payment Receipts)
+                          Payment Receipts
                         </h3>
 
                         {fees.payments.length === 0 ? (
                           <div className="text-center p-8 bg-slate-50 border border-dashed rounded-xl text-on-surface-variant text-xs">
-                            अद्याप कोणतेही व्यवहार झालेले नाहीत.
+                            No payment transactions recorded.
                           </div>
                         ) : (
                           fees.payments.map((pm: any) => (
@@ -1066,7 +1066,7 @@ export default function StudentProfilePage() {
                 {loadingAttendance ? (
                   <div className="p-12 text-center text-on-surface-variant">
                     <Icon name="progress_activity" className="animate-spin text-primary" size={32} />
-                    <p className="text-body-sm mt-2 font-medium">हजेरी रेकॉर्ड्स लोड होत आहेत...</p>
+                    <p className="text-body-sm mt-2 font-medium">Loading attendance records...</p>
                   </div>
                 ) : !attendance ? (
                   <div className="text-center p-6 text-on-surface-variant">Failed to load attendance records.</div>
@@ -1079,7 +1079,7 @@ export default function StudentProfilePage() {
                           <Icon name="percent" size={18} />
                         </div>
                         <div>
-                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">हजेरी प्रमाण (Rate)</div>
+                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Attendance Rate</div>
                           <div className="text-title-md font-black text-on-surface mt-0.5">{attendance.attendanceRate}%</div>
                         </div>
                       </div>
@@ -1088,7 +1088,7 @@ export default function StudentProfilePage() {
                           <Icon name="done" size={18} />
                         </div>
                         <div>
-                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">हजर दिवस (Present)</div>
+                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Present Days</div>
                           <div className="text-title-md font-black text-on-surface mt-0.5">{attendance.presentDays}</div>
                         </div>
                       </div>
@@ -1097,7 +1097,7 @@ export default function StudentProfilePage() {
                           <Icon name="close" size={18} />
                         </div>
                         <div>
-                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">गैरहजर दिवस (Absent)</div>
+                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Absent Days</div>
                           <div className="text-title-md font-black text-on-surface mt-0.5">{attendance.absentDays}</div>
                         </div>
                       </div>
@@ -1106,7 +1106,7 @@ export default function StudentProfilePage() {
                           <Icon name="info" size={18} />
                         </div>
                         <div>
-                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">एकूण दिवस (Total Classes)</div>
+                          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Total Classes</div>
                           <div className="text-title-md font-black text-on-surface mt-0.5">{attendance.totalClasses}</div>
                         </div>
                       </div>
@@ -1120,7 +1120,7 @@ export default function StudentProfilePage() {
                           <div className="flex justify-between items-center gap-4 border-b border-outline-variant/30 pb-3">
                             <h3 className="text-title-md font-bold text-on-surface flex items-center gap-2">
                               <Icon name="calendar_month" size={18} className="text-slate-500" />
-                              मासिक हजेरी दिनदर्शिका (Monthly Calendar)
+                              Monthly Attendance Calendar
                             </h3>
 
                             {Object.keys(attendance.monthlySummary).length > 0 && (
@@ -1161,7 +1161,7 @@ export default function StudentProfilePage() {
 
                           {/* Calendar Grid */}
                           {!selectedMonth ? (
-                            <div className="text-center p-8 text-slate-400">निवडण्यायोग्य महिना उपलब्ध नाही (No months available)</div>
+                            <div className="text-center p-8 text-slate-400">No months available</div>
                           ) : (
                             <div className="space-y-4">
                               <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
@@ -1206,16 +1206,16 @@ export default function StudentProfilePage() {
                               {/* Calendar Legend */}
                               <div className="flex flex-wrap gap-4 justify-center pt-4 border-t border-outline-variant/30 text-[10px] font-bold text-on-surface-variant/80 uppercase">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Present (हजर)
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Present
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Absent (गैरहजर)
+                                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Absent
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Late (उशीर)
+                                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Late
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Excused (रजा)
+                                  <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Excused
                                 </div>
                               </div>
                             </div>
@@ -1228,7 +1228,7 @@ export default function StudentProfilePage() {
                         <div className="p-0 space-y-4">
                           <h3 className="text-title-md font-bold text-on-surface flex items-center gap-2 border-b border-outline-variant/30 pb-3">
                             <Icon name="summarize" size={18} className="text-slate-500" />
-                            मासिक सारांश (Monthly Summary)
+                            Monthly Summary
                           </h3>
                           <div className="space-y-3">
                             {Object.entries(attendance.monthlySummary).map(([month, stats]: [string, any]) => (
@@ -1264,43 +1264,43 @@ export default function StudentProfilePage() {
               <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/40">
                 <Icon name="info" size={24} className="text-primary" />
                 <DialogTitle className="text-title-lg font-bold text-on-surface">
-                  थेट प्रवेश तपशील (Direct Intake Details)
+                  Direct Intake Details
                 </DialogTitle>
               </div>
               
               <DialogDescription className="text-body-sm text-on-surface-variant leading-relaxed">
-                हा विद्यार्थी सिस्टीममध्ये थेट प्रवेश (Direct Intake) किंवा जुना डेटा मायग्रेशनद्वारे दाखल करण्यात आला आहे.
+                This student was admitted via Direct Intake or legacy data migration.
               </DialogDescription>
 
               <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3.5 flex gap-3 text-amber-800 text-xs">
                 <Icon name="warning" size={16} className="text-amber-600 shrink-0" />
                 <div>
-                  <p className="font-bold">नोंद (Warning Details)</p>
+                  <p className="font-bold">Migration Note</p>
                   <p className="text-[11px] text-amber-700/90 mt-0.5">
-                    हा रेकॉर्ड रेग्युलर ऍडमिशन डेस्क प्रोसेसमधून न जाता थेट डेटा मायग्रेशन फॉर्म द्वारे सिस्टीममध्ये तयार करण्यात आला आहे.
+                    This record was imported directly via data migration, bypassing regular admission workflows.
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 py-2 border-t border-b border-outline-variant/30 text-body-sm">
                 <div>
-                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">नोंदणी क्रमांक (Admission No)</span>
+                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">Admission No</span>
                   <strong className="text-on-surface font-mono">{student.admissionNo}</strong>
                 </div>
                 <div>
-                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">प्रवेश तारीख (Admission Date)</span>
+                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">Admission Date</span>
                   <strong className="text-on-surface">{formattedAdmissionDate}</strong>
                 </div>
                 <div>
-                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">प्रवर्ग (Category)</span>
+                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">Category</span>
                   <strong className="text-on-surface">{student.category}</strong>
                 </div>
                 <div>
-                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">गृह संघ (House)</span>
+                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">House</span>
                   <strong className="text-on-surface">{student.house || "None"}</strong>
                 </div>
                 <div className="col-span-2">
-                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">मागील शाळा (Previous School)</span>
+                  <span className="text-on-surface-variant block text-xs font-medium uppercase tracking-wider">Previous School</span>
                   <strong className="text-on-surface leading-normal">{student.previousSchool || "—"}</strong>
                 </div>
               </div>
@@ -1311,7 +1311,7 @@ export default function StudentProfilePage() {
                   onClick={() => setIntakeModalOpen(false)}
                   className="bg-slate-100 text-on-surface px-6 py-2.5 rounded-xl text-xs font-bold"
                 >
-                  बंद करा (Close)
+                  Close
                 </Button>
               </div>
             </div>
@@ -1331,7 +1331,7 @@ export default function StudentProfilePage() {
               <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/40">
                 <Icon name="assignment_turned_in" size={24} className="text-orange-600" />
                 <DialogTitle className="text-title-lg font-bold text-on-surface">
-                  शाला सोडल्याचा दाखला जारी करा (Issue LC/TC)
+                  Issue Leaving Certificate (LC/TC)
                 </DialogTitle>
               </div>
 
@@ -1340,12 +1340,12 @@ export default function StudentProfilePage() {
                   <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex gap-3 text-rose-800 text-xs">
                     <Icon name="warning" size={20} className="text-rose-600 shrink-0" />
                     <div>
-                      <p className="font-bold">शुल्क थकीत चेतावणी (Outstanding Dues Warning)</p>
+                      <p className="font-bold">Outstanding Dues Warning</p>
                       <p className="text-[11px] text-rose-700/90 mt-1">
-                        या विद्यार्थ्याकडे एकूण <strong>₹{lcDuesWarning.toLocaleString("en-IN")}</strong> शुल्क थकीत (Pending Fees) आहे.
+                        This student has outstanding dues of <strong>₹{lcDuesWarning.toLocaleString("en-IN")}</strong>.
                       </p>
                       <p className="text-[11px] text-rose-700/90 mt-1">
-                        तरीही तुम्हाला दाखला जारी करायचा आहे का?
+                        Are you sure you want to issue the certificate anyway?
                       </p>
                     </div>
                   </div>
@@ -1359,7 +1359,7 @@ export default function StudentProfilePage() {
                       }}
                       className="bg-slate-100 text-on-surface"
                     >
-                      नाही, रद्द करा (Cancel)
+                      Cancel
                     </Button>
                     <Button
                       type="button"
@@ -1370,7 +1370,7 @@ export default function StudentProfilePage() {
                       }}
                       className="bg-rose-600 text-white"
                     >
-                      होय, पुढे जा (Proceed Anyway)
+                      Proceed Anyway
                     </Button>
                   </div>
                 </div>
@@ -1379,7 +1379,7 @@ export default function StudentProfilePage() {
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">सोडल्याची तारीख (Leaving Date)</label>
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Leaving Date</label>
                       <input
                         type="date"
                         value={lcLeavingDate}
@@ -1389,44 +1389,44 @@ export default function StudentProfilePage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">अंतिम स्थिती (Target Status)</label>
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Target Status</label>
                       <select
                         value={lcStatus}
                         onChange={(e) => setLcStatus(e.target.value)}
                         required
                         className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
                       >
-                        <option value="TRANSFERRED">TRANSFERRED (सोडून गेले)</option>
-                        <option value="GRADUATED">GRADUATED (उत्तीर्ण झाले)</option>
-                        <option value="DROPPED">DROPPED (शिकणे सोडले)</option>
+                        <option value="TRANSFERRED">TRANSFERRED</option>
+                        <option value="GRADUATED">GRADUATED</option>
+                        <option value="DROPPED">DROPPED</option>
                       </select>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">सोडण्याचे कारण (Reason for Leaving)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Reason for Leaving</label>
                     <select
                       value={lcReason}
                       onChange={(e) => setLcReason(e.target.value)}
                       required
                       className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
                     >
-                      <option value="Completed Studies">Completed Studies (शिक्षण पूर्ण झाले)</option>
-                      <option value="Transferred to another school">Transferred to another school (दुसऱ्या शाळेत प्रवेश)</option>
-                      <option value="Parents relocated">Parents relocated (पालकांचे स्थलांतर)</option>
-                      <option value="Other">Other (इतर)</option>
+                      <option value="Completed Studies">Completed Studies</option>
+                      <option value="Transferred to another school">Transferred to another school</option>
+                      <option value="Parents relocated">Parents relocated</option>
+                      <option value="Other">Other</option>
                     </select>
                   </div>
 
                   {lcReason === "Other" && (
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">इतर कारण लिहा (Custom Reason)</label>
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Custom Reason</label>
                       <input
                         type="text"
                         value={lcCustomReason}
                         onChange={(e) => setLcCustomReason(e.target.value)}
                         required
-                        placeholder="उदा. कौटुंबिक अडचणी"
+                        placeholder="e.g. Family Relocation"
                         className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
                       />
                     </div>
@@ -1434,21 +1434,21 @@ export default function StudentProfilePage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">विद्यार्थ्याचे वर्तन (Conduct)</label>
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Conduct</label>
                       <select
                         value={lcConduct}
                         onChange={(e) => setLcConduct(e.target.value)}
                         required
                         className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
                       >
-                        <option value="Excellent">Excellent (उत्कृष्ट)</option>
-                        <option value="Good">Good (चांगले)</option>
-                        <option value="Satisfactory">Satisfactory (समाधानकारक)</option>
-                        <option value="Poor">Poor (वाईट)</option>
+                        <option value="Excellent">Excellent</option>
+                        <option value="Good">Good</option>
+                        <option value="Satisfactory">Satisfactory</option>
+                        <option value="Poor">Poor</option>
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">स्वाक्षरीकर्ता पद (Signatory Title)</label>
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Signatory Title</label>
                       <input
                         type="text"
                         value={lcSignatoryTitle}
@@ -1460,23 +1460,23 @@ export default function StudentProfilePage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">स्वाक्षरी नाव (Signatory Name)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Signatory Name</label>
                     <input
                       type="text"
                       value={lcSignatoryName}
                       onChange={(e) => setLcSignatoryName(e.target.value)}
-                      placeholder="उदा. डॉ. प्रल्हाद शिंदे"
+                      placeholder="e.g. Principal Name"
                       className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">शेरा (Remarks)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Remarks</label>
                     <textarea
                       value={lcRemarks}
                       onChange={(e) => setLcRemarks(e.target.value)}
                       rows={2}
-                      placeholder="काही टिप्पणी असल्यास लिहा..."
+                      placeholder="Write any comments..."
                       className="w-full rounded-xl border border-outline p-3 text-body-md outline-none focus:border-primary bg-white transition-colors resize-none"
                     />
                   </div>
@@ -1488,7 +1488,7 @@ export default function StudentProfilePage() {
                       onClick={() => setLcModalOpen(false)}
                       className="bg-slate-100 text-on-surface px-5 py-2 rounded-xl text-xs font-bold"
                     >
-                      रद्द करा (Cancel)
+                      Cancel
                     </Button>
                     <Button
                       type="submit"
@@ -1497,7 +1497,7 @@ export default function StudentProfilePage() {
                       loading={lcSubmitting}
                       className="bg-primary text-white px-5 py-2 rounded-xl text-xs font-bold"
                     >
-                      दाखला जारी करा (Issue LC)
+                      Issue LC
                     </Button>
                   </div>
                 </div>

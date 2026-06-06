@@ -320,10 +320,10 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
 
     // 7. Click "Direct Intake Details" button and verify modal
     await page.click("button:has-text('Direct Intake Details')");
-    await expect(page.locator("h2:has-text('थेट प्रवेश तपशील')")).toBeVisible();
-    await expect(page.locator("text=जुना डेटा मायग्रेशनद्वारे दाखल करण्यात आला आहे")).toBeVisible();
-    await page.click("button:has-text('बंद करा')");
-    await expect(page.locator("h2:has-text('थेट प्रवेश तपशील')")).not.toBeVisible();
+    await expect(page.locator("h2:has-text('Direct Intake Details')")).toBeVisible();
+    await expect(page.locator("text=This student was admitted via Direct Intake or legacy data migration.")).toBeVisible();
+    await page.click("button:has-text('Close')");
+    await expect(page.locator("h2:has-text('Direct Intake Details')")).not.toBeVisible();
 
     // 8. Verify right-side Tabbed Area exists and navigation works
     const profileTabTrigger = page.locator("button[role='tab']:has-text('Profile Details')");
@@ -353,9 +353,9 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
 
     // Verify Academics Tab content
     await academicsTabTrigger.click();
-    await expect(page.locator("div").filter({ hasText: /^सरासरी गुण \(Average Score\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("85%");
-    await expect(page.locator("div").filter({ hasText: /^उत्तीर्ण प्रमाण \(Passing Rate\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("100%");
-    await expect(page.locator("div").filter({ hasText: /^एकूण परीक्षा \(Total Exams\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("1");
+    await expect(page.locator("div").filter({ hasText: /^Average Score$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("85%");
+    await expect(page.locator("div").filter({ hasText: /^Passing Rate$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("100%");
+    await expect(page.locator("div").filter({ hasText: /^Total Exams$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("1");
     await expect(page.locator("text=Test Exam Term 1").first()).toBeVisible();
     await expect(page.locator("text=Test Mathematics").first()).toBeVisible();
     await expect(page.locator("text=85 / 100").first()).toBeVisible();
@@ -363,9 +363,9 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
 
     // Verify Fees Tab content
     await feesTabTrigger.click();
-    await expect(page.locator("div").filter({ hasText: /^एकूण बिल \(Total Billed\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("₹5,000");
-    await expect(page.locator("div").filter({ hasText: /^भरलेली फी \(Total Paid\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("₹3,000");
-    await expect(page.locator("div").filter({ hasText: /^बाकी रक्कम \(Remaining Dues\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("₹2,000");
+    await expect(page.locator("div").filter({ hasText: /^Total Billed$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("₹5,000");
+    await expect(page.locator("div").filter({ hasText: /^Total Paid$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("₹3,000");
+    await expect(page.locator("div").filter({ hasText: /^Remaining Dues$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("₹2,000");
     await expect(page.locator("text=INV-TEST-9999").first()).toBeVisible();
     await expect(page.getByText("PARTIAL", { exact: true }).first()).toBeVisible();
     await expect(page.locator("text=REC-TEST-9999").first()).toBeVisible();
@@ -373,11 +373,11 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
 
     // Verify Attendance Tab content
     await attendanceTabTrigger.click();
-    await expect(page.locator("div").filter({ hasText: /^हजेरी प्रमाण \(Rate\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("50%");
-    await expect(page.locator("div").filter({ hasText: /^हजर दिवस \(Present\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("1");
-    await expect(page.locator("div").filter({ hasText: /^गैरहजर दिवस \(Absent\)$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("1");
-    await expect(page.locator("text=मासिक हजेरी दिनदर्शिका (Monthly Calendar)").first()).toBeVisible();
-    await expect(page.locator("text=मासिक सारांश (Monthly Summary)").first()).toBeVisible();
+    await expect(page.locator("div").filter({ hasText: /^Attendance Rate$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("50%");
+    await expect(page.locator("div").filter({ hasText: /^Present Days$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("1");
+    await expect(page.locator("div").filter({ hasText: /^Absent Days$/ }).locator("xpath=..").locator("div.font-black")).toHaveText("1");
+    await expect(page.locator("text=Monthly Attendance Calendar").first()).toBeVisible();
+    await expect(page.locator("text=Monthly Summary").first()).toBeVisible();
   });
 
   test("Admin can issue leaving certificate for a student with dues override and print it", async ({ page }) => {
@@ -398,22 +398,22 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     await issueLcBtn.click();
 
     // The modal opens. Verify title
-    await expect(page.locator("h2:has-text('शाला सोडल्याचा दाखला जारी करा')")).toBeVisible();
+    await expect(page.locator("h2:has-text('Issue Leaving Certificate')")).toBeVisible();
 
     // Click submit, should trigger PENDING_DUES warning block
     const submitBtn = page.locator("#lc-submit-btn");
     await submitBtn.click();
 
     // Verify warning text
-    await expect(page.locator("text=शुल्क थकीत चेतावणी (Outstanding Dues Warning)")).toBeVisible();
+    await expect(page.locator("text=Outstanding Dues Warning")).toBeVisible();
     await expect(page.locator("text=₹2,000")).toBeVisible();
 
     // Click "Proceed Anyway"
-    const proceedBtn = page.locator("button:has-text('होय, पुढे जा')");
+    const proceedBtn = page.locator("button:has-text('Proceed Anyway')");
     await proceedBtn.click();
 
     // The modal should close, student status changes to TRANSFERRED, showing Print LC
-    await expect(page.locator("h2:has-text('शाला सोडल्याचा दाखला जारी करा')")).not.toBeVisible();
+    await expect(page.locator("h2:has-text('Issue Leaving Certificate')")).not.toBeVisible();
     const printLcBtn = page.locator("button:has-text('Print LC')");
     await expect(printLcBtn).toBeVisible();
 
@@ -446,37 +446,37 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     await page.waitForLoadState("networkidle");
 
     // Step 1: Select Source Class, Section, Academic Year
-    await page.locator("label:has-text('वर्ग (Class)') + select").first().selectOption({ label: sourceClassName });
-    await page.locator("label:has-text('तुकडी (Section)') + select").first().selectOption({ label: "A" });
-    // Click "पुढे जा (Next)"
-    await page.click("button:has-text('पुढे जा')");
+    await page.locator("label:has-text('Class') + select").first().selectOption({ label: sourceClassName });
+    await page.locator("label:has-text('Section') + select").first().selectOption({ label: "A" });
+    // Click "Next"
+    await page.click("button:has-text('Next')");
 
     // Step 2: Select Target Destination
-    await page.locator("label:has-text('पुढील शैक्षणिक वर्ष (Target Academic Year)') + select").selectOption({ label: "2027-28" });
-    await page.locator("label:has-text('पुढील वर्ग (Target Class)') + select").selectOption({ label: targetClassName });
-    await page.locator("label:has-text('पुढील तुकडी (Target Section)') + select").selectOption({ label: "A" });
+    await page.locator("label:has-text('Target Academic Year') + select").selectOption({ label: "2027-28" });
+    await page.locator("label:has-text('Target Class') + select").selectOption({ label: targetClassName });
+    await page.locator("label:has-text('Target Section') + select").selectOption({ label: "A" });
     // Click "Load Students"
-    await page.click("button:has-text('विद्यार्थी सूची शोधा')");
+    await page.click("button:has-text('Load Students')");
 
     // Step 3: Select Students list should load
-    await expect(page.locator("h3:has-text('बढतीसाठी विद्यार्थी निवडा')")).toBeVisible();
+    await expect(page.locator("h3:has-text('Select Students')")).toBeVisible();
     // Check that Rajesh Kumar is listed with warning dues badge
     await expect(page.locator("text=Rajesh Kumar")).toBeVisible();
-    await expect(page.locator("text=थकीत शुल्क: ₹2,000")).toBeVisible();
+    await expect(page.locator("text=Outstanding Dues: ₹2,000")).toBeVisible();
 
-    // Click "पुढे जा (Next)"
-    await page.click("button:has-text('पुढे जा')");
+    // Click "Next"
+    await page.click("button:has-text('Next')");
 
     // Step 4: Confirm Billing & Discount
-    await expect(page.locator("h3:has-text('खात्री करा आणि फी सवलत निश्चित करा')")).toBeVisible();
+    await expect(page.locator("h3:has-text('Review & Billing Setup')")).toBeVisible();
     await page.locator("input[type='number']").fill("10");
 
-    // Click "विद्यार्थी बढती प्रक्रिया सुरू करा"
-    await page.click("button:has-text('विद्यार्थी बढती प्रक्रिया सुरू करा')");
+    // Click "Promote Class"
+    await page.click("button:has-text('Promote Class')");
 
     // Step 5: Process Success
-    await expect(page.locator("h3:has-text('वर्ग बढती यशस्वीरित्या पूर्ण!')")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("text=प्रमोट झालेले (Promoted)")).toBeVisible();
+    await expect(page.locator("h3:has-text('Class Promotion Completed Successfully!')")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=Promoted")).toBeVisible();
 
     // Verify promotion database state
     const student = await prisma.student.findFirst({ where: { admissionNo: "ADM-TEST-12345" } });

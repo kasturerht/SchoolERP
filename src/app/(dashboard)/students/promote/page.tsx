@@ -253,9 +253,9 @@ export default function BulkPromotionPage() {
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-headline-md font-black text-on-surface">सामूहिक वर्ग बढती विझार्ड (Bulk Promotion Wizard)</h1>
+          <h1 className="text-headline-md font-black text-on-surface">Bulk Promotion Wizard</h1>
           <p className="text-body-sm text-on-surface-variant font-medium mt-1">
-            वर्गातील विद्यार्थ्यांना पुढील शैक्षणिक वर्षासाठी प्रमोट करा.
+            Promote students to the next academic year.
           </p>
         </div>
       </div>
@@ -297,12 +297,12 @@ export default function BulkPromotionPage() {
               <div className="space-y-5">
                 <h3 className="text-title-md font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                   <Icon name="logout" className="text-slate-400 rotate-180" size={18} />
-                  पायरी १: मूळ वर्ग निवडा (Select Source Class)
+                  Step 1: Select Source Class
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">शैक्षणिक वर्ष (Academic Year)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Academic Year</label>
                     <select
                       value={sourceAcademicYearId}
                       onChange={(e) => setSourceAcademicYearId(e.target.value)}
@@ -316,7 +316,7 @@ export default function BulkPromotionPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">वर्ग (Class)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Class</label>
                     <select
                       value={sourceClassId}
                       onChange={(e) => setSourceClassId(e.target.value)}
@@ -330,7 +330,7 @@ export default function BulkPromotionPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">तुकडी (Section)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Section</label>
                     <select
                       value={sourceSectionId}
                       onChange={(e) => setSourceSectionId(e.target.value)}
@@ -353,7 +353,7 @@ export default function BulkPromotionPage() {
                     icon="arrow_forward"
                     className="bg-primary text-white"
                   >
-                    पुढे जा (Next)
+                    Next
                   </Button>
                 </div>
               </div>
@@ -364,12 +364,12 @@ export default function BulkPromotionPage() {
               <div className="space-y-5">
                 <h3 className="text-title-md font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                   <Icon name="login" className="text-slate-400" size={18} />
-                  पायरी २: अंतिम वर्ग निवडा (Select Target Destination)
+                  Step 2: Select Target Destination
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">पुढील शैक्षणिक वर्ष (Target Academic Year)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Target Academic Year</label>
                     <select
                       value={targetAcademicYearId}
                       onChange={(e) => setTargetAcademicYearId(e.target.value)}
@@ -383,7 +383,7 @@ export default function BulkPromotionPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">पुढील वर्ग (Target Class)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Target Class</label>
                     <select
                       value={targetClassId}
                       onChange={(e) => setTargetClassId(e.target.value)}
@@ -397,7 +397,7 @@ export default function BulkPromotionPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">पुढील तुकडी (Target Section)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Target Section</label>
                     <select
                       value={targetSectionId}
                       onChange={(e) => setTargetSectionId(e.target.value)}
@@ -419,7 +419,7 @@ export default function BulkPromotionPage() {
                     icon="arrow_back"
                     className="bg-white text-slate-700 border-slate-200"
                   >
-                    मागे (Back)
+                    Back
                   </Button>
                   <Button
                     variant="filled"
@@ -429,7 +429,7 @@ export default function BulkPromotionPage() {
                     icon="arrow_forward"
                     className="bg-primary text-white"
                   >
-                    विद्यार्थी सूची शोधा (Load Students)
+                    Load Students
                   </Button>
                 </div>
               </div>
@@ -441,7 +441,7 @@ export default function BulkPromotionPage() {
                 <h3 className="text-title-md font-bold text-slate-800 flex items-center justify-between border-b pb-2">
                   <span className="flex items-center gap-2">
                     <Icon name="person_search" className="text-slate-400" size={18} />
-                    पायरी ३: बढतीसाठी विद्यार्थी निवडा (Select Students)
+                    Step 3: Select Students
                   </span>
                   <span className="text-xs text-slate-400 font-semibold">
                     Total: {students.length}
@@ -450,7 +450,7 @@ export default function BulkPromotionPage() {
 
                 {students.length === 0 ? (
                   <div className="text-center p-8 bg-slate-50 border border-dashed rounded-2xl text-on-surface-variant text-sm font-medium">
-                    निवडलेल्या मूळ वर्गात प्रमोट करण्यासाठी कोणतेही विद्यार्थी आढळले नाहीत.
+                    No students found in the selected source class for promotion.
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -461,14 +461,14 @@ export default function BulkPromotionPage() {
                         onClick={() => setSelectedStudentIds(students.map((s) => s.id))}
                         className="hover:underline cursor-pointer"
                       >
-                        सर्व निवडा (Select All)
+                        Select All
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedStudentIds([])}
                         className="hover:underline cursor-pointer"
                       >
-                        सर्व रद्द करा (Deselect All)
+                        Deselect All
                       </button>
                     </div>
 
@@ -507,7 +507,7 @@ export default function BulkPromotionPage() {
                             {dues > 0 && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-50 text-rose-700 border border-rose-200/50 flex items-center gap-1 shrink-0 animate-pulse">
                                 <Icon name="warning" size={12} />
-                                थकीत शुल्क: ₹{dues.toLocaleString("en-IN")}
+                                Outstanding Dues: ₹{dues.toLocaleString("en-IN")}
                               </span>
                             )}
                           </div>
@@ -524,7 +524,7 @@ export default function BulkPromotionPage() {
                     icon="arrow_back"
                     className="bg-white text-slate-700 border-slate-200"
                   >
-                    मागे (Back)
+                    Back
                   </Button>
                   <Button
                     variant="filled"
@@ -533,7 +533,7 @@ export default function BulkPromotionPage() {
                     icon="arrow_forward"
                     className="bg-primary text-white"
                   >
-                    पुढे जा (Next)
+                    Next
                   </Button>
                 </div>
               </div>
@@ -544,28 +544,28 @@ export default function BulkPromotionPage() {
               <div className="space-y-5">
                 <h3 className="text-title-md font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
                   <Icon name="rate_review" className="text-slate-400" size={18} />
-                  पायरी ४: खात्री करा आणि फी सवलत निश्चित करा (Review & Billing Setup)
+                  Step 4: Review & Billing Setup
                 </h3>
 
                 <div className="p-4 bg-slate-50 border border-outline-variant/30 rounded-2xl grid grid-cols-2 gap-4 text-xs font-semibold text-slate-700">
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">मूळ वर्ग (Source Class)</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Source Class</span>
                     <strong className="text-slate-800 text-sm">
                       {sourceClasses.find((c) => c.id === sourceClassId)?.name} (Section {sourceSections.find((s) => s.id === sourceSectionId)?.name})
                     </strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">नवीन वर्ग (Target Class)</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Target Class</span>
                     <strong className="text-slate-800 text-sm">
                       {targetClasses.find((c) => c.id === targetClassId)?.name} (Section {targetSections.find((s) => s.id === targetSectionId)?.name})
                     </strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">प्रमोट होणारे एकूण विद्यार्थी</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Total Promoted Students</span>
                     <strong className="text-primary text-sm font-black">{selectedStudentIds.length}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">शैक्षणिक सत्र (Academic Session)</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Academic Session</span>
                     <strong className="text-slate-800 text-sm">
                       {academicYears.find((y) => y.id === targetAcademicYearId)?.name}
                     </strong>
@@ -574,10 +574,10 @@ export default function BulkPromotionPage() {
 
                 {/* Auto Invoice generation configurations */}
                 <div className="space-y-4 pt-2">
-                  <div className="font-bold text-xs uppercase tracking-wider text-slate-500 pl-0.5">पुढील वर्षाची फी सेटअप (Next-Year Billing Concession)</div>
+                  <div className="font-bold text-xs uppercase tracking-wider text-slate-500 pl-0.5">Next-Year Billing Concession</div>
                   
                   <div className="space-y-1.5 max-w-xs">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">सर्व प्रमोट होणाऱ्या विद्यार्थ्यांवर फी सवलत (%)</label>
+                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Fee Concession on All Promoted Students (%)</label>
                     <div className="relative flex items-center">
                       <input
                         type="number"
@@ -590,7 +590,7 @@ export default function BulkPromotionPage() {
                       <span className="absolute right-3.5 font-bold text-slate-400 text-sm">%</span>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-normal pl-0.5">
-                      नवीन वर्षात प्रवेश देताना विद्यार्थ्यांच्या ऑटो-जनरेट होणाऱ्या बिलावर ही सवलत लागू होईल.
+                      This concession will be applied to the auto-generated bills of students when they are admitted in the new academic year.
                     </p>
                   </div>
                 </div>
@@ -602,7 +602,7 @@ export default function BulkPromotionPage() {
                     icon="arrow_back"
                     className="bg-white text-slate-700 border-slate-200"
                   >
-                    मागे (Back)
+                    Back
                   </Button>
                   <Button
                     variant="filled"
@@ -611,7 +611,7 @@ export default function BulkPromotionPage() {
                     icon="bolt"
                     className="bg-primary text-white"
                   >
-                    विद्यार्थी बढती प्रक्रिया सुरू करा (Promote Class)
+                    Promote Class
                   </Button>
                 </div>
               </div>
@@ -625,7 +625,7 @@ export default function BulkPromotionPage() {
                 </div>
                 
                 <div className="space-y-2">
-                  <h3 className="text-headline-sm font-black text-slate-800">वर्ग बढती यशस्वीरित्या पूर्ण!</h3>
+                  <h3 className="text-headline-sm font-black text-slate-800">Class Promotion Completed Successfully!</h3>
                   <p className="text-body-sm text-slate-400 font-medium">
                     {results.message}
                   </p>
@@ -633,11 +633,11 @@ export default function BulkPromotionPage() {
 
                 <div className="p-4 bg-slate-50 rounded-2xl border text-xs grid grid-cols-2 divide-x">
                   <div className="space-y-0.5">
-                    <span className="text-slate-400 block uppercase font-bold tracking-wider">प्रमोट झालेले (Promoted)</span>
+                    <span className="text-slate-400 block uppercase font-bold tracking-wider">Promoted</span>
                     <strong className="text-emerald-600 text-base font-black">{results.promotedCount}</strong>
                   </div>
                   <div className="space-y-0.5">
-                    <span className="text-slate-400 block uppercase font-bold tracking-wider">वगळलेले (Skipped / Already Done)</span>
+                    <span className="text-slate-400 block uppercase font-bold tracking-wider">Skipped / Already Done</span>
                     <strong className="text-slate-500 text-base font-black">{results.skippedCount}</strong>
                   </div>
                 </div>
@@ -649,7 +649,7 @@ export default function BulkPromotionPage() {
                     icon="school"
                     className="bg-white text-slate-700 border-slate-200"
                   >
-                    विद्यार्थी सूचीकडे जा (Go to Directory)
+                    Go to Directory
                   </Button>
                   <Button
                     variant="filled"
@@ -661,7 +661,7 @@ export default function BulkPromotionPage() {
                     icon="refresh"
                     className="bg-primary text-white"
                   >
-                    नवीन बढती प्रक्रिया करा (Promote Another Batch)
+                    Promote Another Batch
                   </Button>
                 </div>
               </div>
