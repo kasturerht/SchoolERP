@@ -9,6 +9,7 @@ export default async function DashboardPage() {
       <DashboardContent 
         userName={session?.user.name} 
         roleName={session?.user.roleName} 
+        branchId={session?.user.branchId}
       />
     </div>
   );

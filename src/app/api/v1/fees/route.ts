@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    // Branch scoping
-    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+    // Restrict branch-scoped roles to their home branch
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
       (invoiceWhere.student as Record<string, unknown>).branchId = ctx.branchId;
     } else if (branchId) {
       (invoiceWhere.student as Record<string, unknown>).branchId = branchId;

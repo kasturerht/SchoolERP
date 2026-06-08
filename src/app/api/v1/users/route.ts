@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
     organizationId: ctx.organizationId,
   };
 
-  // BRANCH_ADMIN can only see users in their branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -114,8 +114,8 @@ export async function POST(req: NextRequest) {
     return apiError("FORBIDDEN", "Cannot create a SUPER_ADMIN user", 403);
   }
 
-  // BRANCH_ADMIN can only create users in their own branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
+  // Restrict branch-scoped roles from creating users in another branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create users in another branch", 403);
   }
 

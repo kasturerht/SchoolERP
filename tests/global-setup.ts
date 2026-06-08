@@ -33,7 +33,7 @@ async function globalSetup(config: FullConfig) {
   const org = await prisma.organization.findFirst();
   if (!org) throw new Error("No organization found in database. Run database seeder first.");
 
-  const branch = await prisma.branch.findFirst({ where: { organizationId: org.id } });
+  const branch = await prisma.branch.findFirst({ where: { organizationId: org.id, code: "CSVKRD" } }) || await prisma.branch.findFirst({ where: { organizationId: org.id } });
   if (!branch) throw new Error("No branch found for organization.");
 
   const schoolAdminRole = await prisma.role.findFirst({ where: { name: "SCHOOL_ADMIN" } });
@@ -96,7 +96,7 @@ async function globalSetup(config: FullConfig) {
   console.log("Database & Firebase setup complete. Saving auth sessions...");
 
   // Ensure output directory exists
-  const authDir = "C:/Users/Admin/.gemini/antigravity/brain/532c3931-a4a0-4f51-ab61-122b1ddfd523/scratch/auth";
+  const authDir = path.join(__dirname, "tmp", "auth");
   if (!fs.existsSync(authDir)) {
     fs.mkdirSync(authDir, { recursive: true });
   }

@@ -10,6 +10,8 @@ import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { createStudentSchema } from "@/lib/validations/student";
 import { saveUploadedImage, UploadError } from "@/lib/upload";
 import crypto from "crypto";
+import { generateUniqueAdmissionNo, generateUniqueInvoiceNo, generateUniqueReceiptNo } from "@/lib/unique-id";
+import { logAction } from "@/lib/audit";
 
 /**
  * GET /api/v1/students — list students with pagination, search, and filters
@@ -20,14 +22,16 @@ export async function GET(req: NextRequest) {
 
   const ctx = getTenantContext(req);
   const url = new URL(req.url);
-  const { page, limit, search } = parsePagination(url);
+  const { page, limit: parsedLimit, search } = parsePagination(url);
+  const limitParam = url.searchParams.get("limit");
+  const limit = limitParam === "9999" ? 10000 : parsedLimit;
   const branchId = url.searchParams.get("branchId");
 
   const where: Record<string, unknown> = {
     branch: { organizationId: ctx.organizationId },
   };
 
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -79,6 +83,8 @@ export async function GET(req: NextRequest) {
           admissionNo: true,
           gender: true,
           status: true,
+          category: true,
+          house: true,
           dateOfBirth: true,
           admissionDate: true,
           fatherPhone: true,
@@ -169,7 +175,7 @@ export async function POST(req: NextRequest) {
 
   const ctx = getTenantContext(req);
 
-  let formData: FormData;
+  let formData: any;
   try {
     formData = await req.formData();
   } catch {
@@ -191,8 +197,8 @@ export async function POST(req: NextRequest) {
 
   const data = parsed.data;
 
-  // BRANCH_ADMIN can only create students in their own branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
+  // Enforce branch isolation for all branch-level roles
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create student in another branch", 403);
   }
 
@@ -231,7 +237,7 @@ export async function POST(req: NextRequest) {
       }
     }
     // Auto-generate admissionNo
-    const admissionNo = `ADM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const admissionNo = await generateUniqueAdmissionNo(prisma);
 
     // Handle photo upload
     let photoPath: string | null = null;
@@ -365,7 +371,7 @@ export async function POST(req: NextRequest) {
             status = "PARTIAL";
           }
 
-          const invoiceNo = `INV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+          const invoiceNo = await generateUniqueInvoiceNo(tx);
           const dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + 30);
 
@@ -394,7 +400,7 @@ export async function POST(req: NextRequest) {
           // Create fee payment record if amount was paid
           const pm = data.paymentMethod;
           if (amountPaid > 0 && pm) {
-            const receiptNo = `RCP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+            const receiptNo = await generateUniqueReceiptNo(tx);
             await tx.feePayment.create({
               data: {
                 invoiceId: invoice.id,
@@ -411,6 +417,16 @@ export async function POST(req: NextRequest) {
 
       return created;
     }, { timeout: 30000 });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: student.branch.id,
+      userId: ctx.userId,
+      action: "CREATE",
+      module: "students",
+      entityId: student.id,
+      details: { admissionNo: student.admissionNo, name: `${student.firstName} ${student.lastName}` },
+    });
 
     return apiSuccess(student, undefined, 201);
   } catch (error) {

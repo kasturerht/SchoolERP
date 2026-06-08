@@ -7,6 +7,7 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { createFollowUpSchema } from "@/lib/validations/admission";
+import { logAction } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       where: {
         id,
         organizationId: ctx.organizationId,
-        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
+        ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
       },
     });
 
@@ -69,6 +70,16 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       return log;
     }, { timeout: 10000 });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: inquiry.branchId,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "ADMISSIONS",
+      entityId: inquiry.id,
+      details: { studentName: inquiry.studentName, statusReached: data.statusReached, context: "INQUIRY_FOLLOW_UP" }
+    });
 
     return apiSuccess(followUp, undefined, 201);
   } catch (error) {

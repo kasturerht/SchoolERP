@@ -28,8 +28,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
     branch: { organizationId: ctx.organizationId },
   };
 
-  // BRANCH_ADMIN can only see staff in their branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
 
@@ -95,8 +95,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       branch: { organizationId: ctx.organizationId },
     };
 
-    // BRANCH_ADMIN can only edit staff in their branch
-    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+    // Restrict branch-scoped roles to their home branch
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
       existingWhere.branchId = ctx.branchId;
     }
 
@@ -240,6 +240,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       },
     });
 
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: staff.branch.id,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "STAFF",
+      entityId: staff.id,
+      details: { name: staff.name, employeeId: staff.employeeId, role: staff.role },
+    });
+
     return apiSuccess(staff);
   } catch (error) {
     console.error("Update staff error:", error);
@@ -263,8 +273,8 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       branch: { organizationId: ctx.organizationId },
     };
 
-    // BRANCH_ADMIN can only delete staff in their branch
-    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+    // Restrict branch-scoped roles to their home branch
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
       existingWhere.branchId = ctx.branchId;
     }
 
@@ -274,6 +284,16 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     await prisma.staff.update({
       where: { id },
       data: { status: "TERMINATED" },
+    });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: existing.branchId,
+      userId: ctx.userId,
+      action: "DELETE",
+      module: "STAFF",
+      entityId: existing.id,
+      details: { name: existing.name, employeeId: existing.employeeId, action: "TERMINATE" },
     });
 
     return apiSuccess({ id, terminated: true });

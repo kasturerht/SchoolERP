@@ -104,6 +104,18 @@ export const createStudentSchema = z.object({
   ),
   paymentMethod: z.enum(PAYMENT_MODES).optional().or(z.literal("")),
   transactionId: z.string().max(100).optional().or(z.literal("")),
+}).refine((data) => {
+  const dobStr = data.dateOfBirth;
+  const admStr = data.admissionDate || new Date().toISOString().slice(0, 10);
+  if (!dobStr || !admStr) return true;
+  const dob = new Date(dobStr);
+  const adm = new Date(admStr);
+  if (isNaN(dob.getTime()) || isNaN(adm.getTime())) return true;
+  const ageAtAdmission = (adm.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+  return ageAtAdmission >= 3.0;
+}, {
+  message: "Student must be at least 3 years old on the admission date",
+  path: ["dateOfBirth"]
 });
 
 export const updateStudentSchema = z.object({
@@ -136,6 +148,18 @@ export const updateStudentSchema = z.object({
   category: z.enum(STUDENT_CATEGORIES).optional(),
   leavingDate: z.string().optional().or(z.literal("")),
   leavingReason: z.string().max(500).optional().or(z.literal("")),
+}).refine((data) => {
+  if (data.dateOfBirth && data.admissionDate) {
+    const dob = new Date(data.dateOfBirth);
+    const adm = new Date(data.admissionDate);
+    if (isNaN(dob.getTime()) || isNaN(adm.getTime())) return true;
+    const ageAtAdmission = (adm.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    return ageAtAdmission >= 3.0;
+  }
+  return true;
+}, {
+  message: "Student must be at least 3 years old on the admission date",
+  path: ["dateOfBirth"]
 });
 
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;

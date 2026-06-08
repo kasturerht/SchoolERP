@@ -37,6 +37,9 @@ const classIncludes = {
   feeStructures: {
     include: { feeCategory: { select: { name: true } } },
   },
+  feeInstallmentTemplates: {
+    orderBy: { dueDate: "asc" as const },
+  },
   branch: { select: { id: true, name: true } },
   academicYear: { select: { id: true, name: true } },
 };
@@ -105,12 +108,34 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         feeStructures: {
           include: { feeCategory: { select: { name: true } } },
         },
+        feeInstallmentTemplates: true,
       },
     });
 
     if (!existing) return apiNotFound("Class");
 
-    const { name, numericGrade, subjects, sections, fees } = parsed.data;
+    const { name, numericGrade, subjects, sections, fees, installments } = parsed.data;
+
+    // Enforce sum match for installments if provided or updated
+    if (fees !== undefined || installments !== undefined) {
+      const finalFees = fees !== undefined ? fees : existing.feeStructures.map(f => ({
+        name: f.feeCategory.name,
+        amount: Number(f.amount)
+      }));
+      
+      const finalInstallments = installments !== undefined ? installments : existing.feeInstallmentTemplates;
+
+      const totalFeesAmount = finalFees.reduce((sum, f) => sum + Number(f.amount), 0);
+      const totalInstallmentsAmount = finalInstallments.reduce((sum, inst) => sum + Number(inst.amount), 0);
+
+      if (finalInstallments.length > 0 && Math.abs(totalFeesAmount - totalInstallmentsAmount) > 0.01) {
+        return apiError(
+          "BAD_REQUEST",
+          `The sum of installments (₹${totalInstallmentsAmount.toLocaleString("en-IN")}) must equal the total fee amount (₹${totalFeesAmount.toLocaleString("en-IN")}).`,
+          400
+        );
+      }
+    }
 
     // Verify all staff IDs assigned as teachers belong to organization
     if (sections !== undefined) {
@@ -375,6 +400,30 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
               },
             });
           }
+        }
+      }
+
+      // Sync installments
+      if (installments !== undefined) {
+        // Delete all old templates
+        await tx.feeInstallmentTemplate.deleteMany({
+          where: { classId: id },
+        });
+
+        // Create new templates
+        for (const inst of installments) {
+          await tx.feeInstallmentTemplate.create({
+            data: {
+              classId: id,
+              academicYearId: existing.academicYearId,
+              name: inst.name,
+              amount: inst.amount,
+              dueDate: new Date(inst.dueDate),
+              lateFeeActive: inst.lateFeeActive,
+              lateFeePerDay: inst.lateFeePerDay,
+              lateFeeGrace: inst.lateFeeGrace,
+            },
+          });
         }
       }
     }, { timeout: 30000 });

@@ -1,19 +1,28 @@
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiUnauthorized } from "@/lib/api-helpers";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return apiUnauthorized();
 
   const orgId = session.user.organizationId;
-  const branchId = session.user.branchId;
+
+  // Extract branchId from query parameter for global roles, fallback to session branchId
+  const url = new URL(req.url);
+  const queryBranchId = url.searchParams.get("branchId");
   const isBranchScoped = session.user.roleName === "BRANCH_ADMIN";
+
+  let branchId = session.user.branchId;
+  if (!isBranchScoped && queryBranchId !== null) {
+    branchId = queryBranchId || null;
+  }
 
   const branchWhere = {
     branch: {
       organizationId: orgId,
-      ...(isBranchScoped && branchId ? { id: branchId } : {}),
+      ...(branchId ? { id: branchId } : {}),
     },
   };
 

@@ -152,7 +152,7 @@ export const NAVIGATION_ITEMS = [
   // { label: "Transport", href: "/transport/routes", icon: "directions_bus", permission: "transport:read" },
   // { label: "Library", href: "/library/books", icon: "local_library", permission: "library:read" },
   // { label: "Hostel", href: "/hostel", icon: "apartment", permission: "hostel:read" },
-  // { label: "Notices", href: "/communication/notices", icon: "campaign", permission: "notices:read" },
+  { label: "Notices", href: "/notices", icon: "campaign", permission: "notices:read" },
   // { label: "Events", href: "/communication/events", icon: "event", permission: "events:read" },
   // { label: "Reports", href: "/reports", icon: "analytics", permission: "reports:view" },
   

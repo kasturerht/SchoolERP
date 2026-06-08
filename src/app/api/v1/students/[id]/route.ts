@@ -9,6 +9,7 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { updateStudentSchema } from "@/lib/validations/student";
 import { saveUploadedImage, deleteUploadedFile, UploadError } from "@/lib/upload";
+import { logAction } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     branch: { organizationId: ctx.organizationId },
   };
 
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
 
@@ -137,7 +138,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   // Accept both FormData (with files) and JSON
   let fields: Record<string, string> = {};
-  let formData: FormData | null = null;
+  let formData: any = null;
   const contentType = req.headers.get("content-type") || "";
 
   try {
@@ -166,7 +167,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       branch: { organizationId: ctx.organizationId },
     };
 
-    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
       existingWhere.branchId = ctx.branchId;
     }
 
@@ -313,6 +314,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       },
     });
 
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: student.branch.id,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "students",
+      entityId: student.id,
+      details: { admissionNo: student.admissionNo, name: `${student.firstName} ${student.lastName}` },
+    });
+
     return apiSuccess(student);
   } catch (error) {
     console.error("Update student error:", error);
@@ -336,7 +347,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       branch: { organizationId: ctx.organizationId },
     };
 
-    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
       existingWhere.branchId = ctx.branchId;
     }
 
@@ -346,6 +357,16 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     await prisma.student.update({
       where: { id },
       data: { status: "DROPPED" },
+    });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: existing.branchId,
+      userId: ctx.userId,
+      action: "DELETE",
+      module: "students",
+      entityId: id,
+      details: { admissionNo: existing.admissionNo, name: `${existing.firstName} ${existing.lastName}` },
     });
 
     return apiSuccess({ id, dropped: true });

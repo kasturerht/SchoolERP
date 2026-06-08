@@ -193,6 +193,8 @@ export default function AdmissionsPage() {
   // Selection configurations
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [classSections, setClassSections] = useState<Section[]>([]);
+  const [installmentTemplates, setInstallmentTemplates] = useState<any[]>([]);
+  const [customInstallments, setCustomInstallments] = useState<{ templateId: string; amount: number; checked: boolean }[]>([]);
 
   // Stepper Wizards Form States
   const [inquiryForm, setInquiryForm] = useState({
@@ -861,7 +863,7 @@ export default function AdmissionsPage() {
 
     setWorkspaceOpen(true);
 
-    // If at Shortlist stage, load sections for class
+    // If at Shortlist stage, load sections and installment templates for class
     if (app.status === "SHORTLISTED" && app.class?.id) {
       try {
         const res = await fetch(`/api/v1/classes/${app.class.id}/sections`);
@@ -872,6 +874,23 @@ export default function AdmissionsPage() {
         }
       } catch {
         console.error("Failed to load sections.");
+      }
+
+      try {
+        const res = await fetch(`/api/v1/fee-installment-templates?classId=${app.class.id}&academicYearId=${app.academicYear?.id || ""}`);
+        const data = await res.json();
+        if (data.success) {
+          setInstallmentTemplates(data.data);
+          setCustomInstallments(
+            data.data.map((t: any) => ({
+              templateId: t.id,
+              amount: Number(t.amount),
+              checked: true,
+            }))
+          );
+        }
+      } catch {
+        console.error("Failed to load installment templates.");
       }
     }
   };
@@ -1038,6 +1057,13 @@ export default function AdmissionsPage() {
     if (!selectedApp) return;
     setActionLoading(true);
     try {
+      const activeInstallments = customInstallments
+        .filter((inst) => inst.checked)
+        .map((inst) => ({
+          templateId: inst.templateId,
+          amount: inst.amount,
+        }));
+
       const payload = {
         sectionId: promoteForm.sectionId,
         rollNo: promoteForm.rollNo || undefined,
@@ -1046,6 +1072,7 @@ export default function AdmissionsPage() {
         amountPaid: Number(promoteForm.amountPaid) || undefined,
         paymentMethod: promoteForm.paymentMethod,
         transactionId: promoteForm.transactionId || undefined,
+        installments: activeInstallments.length > 0 ? activeInstallments : undefined,
       };
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/promote`, {
         method: "POST",
@@ -1633,8 +1660,9 @@ export default function AdmissionsPage() {
                             <Button
                               variant="outlined"
                               size="sm"
-                              icon="arrow_back"
-                              className="rotate-180 text-primary border-primary/30"
+                              icon="arrow_forward"
+                              iconPosition="trailing"
+                              className="text-primary border-primary/30"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenWorkspace(app);
@@ -2300,7 +2328,21 @@ export default function AdmissionsPage() {
                                 label="Discount Percent (%)"
                                 type="number"
                                 value={String(promoteForm.discountPercent)}
-                                onChange={(e) => setPromoteForm({ ...promoteForm, discountPercent: Number(e.target.value) })}
+                                onChange={(e) => {
+                                  const discountPercent = Number(e.target.value);
+                                  setPromoteForm({ ...promoteForm, discountPercent });
+                                  setCustomInstallments((prev) =>
+                                    prev.map((inst) => {
+                                      const template = installmentTemplates.find((t) => t.id === inst.templateId);
+                                      if (template) {
+                                        const originalAmt = Number(template.amount);
+                                        const discounted = originalAmt * (1 - discountPercent / 100);
+                                        return { ...inst, amount: discounted };
+                                      }
+                                      return inst;
+                                    })
+                                  );
+                                }}
                               />
                               <TextField
                                 label="Amount Collected (₹)"
@@ -2309,6 +2351,75 @@ export default function AdmissionsPage() {
                                 onChange={(e) => setPromoteForm({ ...promoteForm, amountPaid: Number(e.target.value) })}
                               />
                             </div>
+
+                            {installmentTemplates.length > 0 ? (
+                              <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                  Installment Plan & Adjustments
+                                </h4>
+                                <div className="space-y-2">
+                                  {installmentTemplates.map((template) => {
+                                    const customInst = customInstallments.find((ci) => ci.templateId === template.id);
+                                    if (!customInst) return null;
+
+                                    return (
+                                      <div key={template.id} className="flex items-center justify-between gap-4 bg-white p-3 rounded border border-slate-200">
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="checkbox"
+                                            id={`inst-check-${template.id}`}
+                                            checked={customInst.checked}
+                                            onChange={(e) => {
+                                              const checked = e.target.checked;
+                                              setCustomInstallments((prev) =>
+                                                prev.map((c) => (c.templateId === template.id ? { ...c, checked } : c))
+                                              );
+                                            }}
+                                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4"
+                                          />
+                                          <div>
+                                            <label htmlFor={`inst-check-${template.id}`} className="text-xs font-semibold text-slate-700 block cursor-pointer">
+                                              {template.name}
+                                            </label>
+                                            <span className="text-[10px] text-slate-400 block">
+                                              Due: {new Date(template.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <div className="text-right">
+                                            <span className="text-[10px] text-slate-400 block">
+                                              Original: ₹{Number(template.amount).toLocaleString("en-IN")}
+                                            </span>
+                                          </div>
+                                          <div className="relative rounded-md shadow-sm w-32">
+                                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                                              <span className="text-slate-500 text-xs">₹</span>
+                                            </div>
+                                            <input
+                                              type="number"
+                                              disabled={!customInst.checked}
+                                              value={customInst.amount}
+                                              onChange={(e) => {
+                                                const val = Number(e.target.value);
+                                                setCustomInstallments((prev) =>
+                                                  prev.map((c) => (c.templateId === template.id ? { ...c, amount: val } : c))
+                                                );
+                                              }}
+                                              className="block w-full rounded border-slate-300 pl-6 pr-2 py-1 text-xs text-right text-slate-800 disabled:bg-slate-50 disabled:text-slate-400 focus:border-teal-500 focus:ring-teal-500"
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded">
+                                Note: No active installment templates found for this class. A consolidated annual invoice will be generated.
+                              </div>
+                            )}
 
                             {promoteForm.amountPaid > 0 && (
                               <div className="grid grid-cols-2 gap-4">

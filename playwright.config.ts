@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "path";
 
-const SCRATCH_DIR = "C:/Users/Admin/.gemini/antigravity/brain/532c3931-a4a0-4f51-ab61-122b1ddfd523/scratch";
+const SCRATCH_DIR = path.join(__dirname, "tests", "tmp");
 
 export const STORAGE_STATE_ADMIN = path.join(SCRATCH_DIR, "auth/admin.json");
 export const STORAGE_STATE_COUNSELOR = path.join(SCRATCH_DIR, "auth/counselor.json");

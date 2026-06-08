@@ -8,6 +8,8 @@ import {
   apiNotFound,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { generateUniqueInvoiceNo } from "@/lib/unique-id";
+import crypto from "crypto";
 
 const promoteBulkSchema = z.object({
   studentIds: z.array(z.string()).min(1, "At least one student must be selected"),
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
     const results = await prisma.$transaction(async (tx) => {
       const promoted: string[] = [];
       const skipped: string[] = [];
+      const generatedInvoiceNos = new Set<string>();
 
       for (const studentId of studentIds) {
         // Verify student exists in this tenant organization
@@ -118,7 +121,25 @@ export async function POST(req: NextRequest) {
 
         // Generate invoice if target class has fees
         if (totalAmount > 0) {
-          const invoiceNo = `INV-PROMO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+          let invoiceNo = "";
+          let isUnique = false;
+
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const candidate = await generateUniqueInvoiceNo(tx);
+            if (!generatedInvoiceNos.has(candidate)) {
+              invoiceNo = candidate;
+              generatedInvoiceNos.add(candidate);
+              isUnique = true;
+              break;
+            }
+          }
+
+          if (!isUnique) {
+            // Fallback to a guaranteed unique ID with a full UUID inside standard format
+            invoiceNo = `INV-PROMO-FB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+            generatedInvoiceNos.add(invoiceNo);
+          }
+
           const dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + 30); // 30 days due date
 

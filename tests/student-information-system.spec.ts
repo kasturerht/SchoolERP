@@ -11,11 +11,11 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     const org = await prisma.organization.findFirst();
     if (!org) throw new Error("No organization found");
 
-    const branch = await prisma.branch.findFirst({ where: { organizationId: org.id } });
+    const branch = await prisma.branch.findFirst({ where: { organizationId: org.id, code: "CSVKRD" } }) || await prisma.branch.findFirst({ where: { organizationId: org.id } });
     if (!branch) throw new Error("No branch found");
 
     // Get or create Academic Year
-    let academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id } });
+    let academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, isCurrent: true } });
     if (!academicYear) {
       academicYear = await prisma.academicYear.create({
         data: {
@@ -196,7 +196,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
           create: {
             academicYearId: academicYear.id,
             sectionId: section.id,
-            rollNo: "10",
+            rollNo: "99",
           },
         },
       },
@@ -429,7 +429,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
   test("Admin can use bulk promotion wizard to promote students with automatic invoice rollover", async ({ page }) => {
     const org = await prisma.organization.findFirst();
     if (!org) throw new Error("No organization found");
-    const branch = await prisma.branch.findFirst({ where: { organizationId: org.id } });
+    const branch = await prisma.branch.findFirst({ where: { organizationId: org.id, code: "CSVKRD" } }) || await prisma.branch.findFirst({ where: { organizationId: org.id } });
     if (!branch) throw new Error("No branch found");
     const academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, isCurrent: true } });
     if (!academicYear) throw new Error("No academic year found");
@@ -492,4 +492,38 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     });
     expect(enrollment).not.toBeNull();
   });
+
+  test("Admin student directory displays correct stats and can search all students without limit caps", async ({ page }) => {
+    // 1. Navigate to student directory page
+    await page.goto("/students");
+    await page.waitForLoadState("networkidle");
+
+    // 2. Verify Total Students card displays a number > 200 (since simulator seeds 201 students)
+    const totalStudentsText = page.locator("div").filter({ hasText: /^Total Students$/ }).locator("xpath=..").locator("div.text-headline-md");
+    await expect(totalStudentsText).toBeVisible();
+    const totalCountStr = await totalStudentsText.textContent();
+    const totalCount = parseInt(totalCountStr || "0", 10);
+    console.log(`E2E Assert: Total students in UI is ${totalCount}`);
+    expect(totalCount).toBeGreaterThan(200);
+
+    // 3. Verify RTE Category card displays a number > 0 (e.g. 31) instead of 0
+    const rteCategoryText = page.locator("div").filter({ hasText: /^RTE Category$/ }).locator("xpath=..").locator("div.text-headline-md");
+    await expect(rteCategoryText).toBeVisible();
+    const rteCountStr = await rteCategoryText.textContent();
+    const rteCount = parseInt(rteCountStr || "0", 10);
+    console.log(`E2E Assert: RTE students in UI is ${rteCount}`);
+    expect(rteCount).toBeGreaterThan(0); // Checks category field selection is fixed
+
+    // 4. Perform search for 'aanya'
+    const searchBar = page.locator("input[placeholder='Search students']");
+    await searchBar.fill("aanya");
+    await page.waitForTimeout(1500); // Wait for client-side filter to apply in AG-Grid
+
+    // 5. Verify that we find multiple rows matching Aanya (we have 2 Aanya Verma and 1 Aanya Pawar in database)
+    const rows = page.locator(".ag-row");
+    const rowCount = await rows.count();
+    console.log(`E2E Assert: Search results count for 'aanya' is ${rowCount}`);
+    expect(rowCount).toBeGreaterThan(1); // Should see at least 2 or 3 rows, confirming older records are not truncated
+  });
 });
+

@@ -9,6 +9,8 @@ import {
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { createFeePaymentSchema } from "@/lib/validations/fee-payment";
 import crypto from "crypto";
+import { generateUniqueReceiptNo } from "@/lib/unique-id";
+import { logAction } from "@/lib/audit";
 
 interface RouteContext {
   params: Promise<{ studentId: string }>;
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       where: {
         id: studentId,
         branch: { organizationId: ctx.organizationId },
-        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId
+        ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId
           ? { branchId: ctx.branchId }
           : {}),
       },
@@ -59,8 +61,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return apiNotFound("Student");
     }
 
-    // Get the active (non-cancelled) invoice with items
-    const invoice = await prisma.invoice.findFirst({
+    // Get all active (non-cancelled) invoices with items
+    const activeInvoices = await prisma.invoice.findMany({
       where: {
         studentId,
         status: { not: "CANCELLED" },
@@ -70,6 +72,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         number: true,
         totalAmount: true,
         paidAmount: true,
+        lateFeeAccumulated: true,
         status: true,
         dueDate: true,
         items: {
@@ -80,7 +83,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { dueDate: "asc" },
     });
 
     // Get all payment records
@@ -103,6 +106,71 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ? `${enrollment.section.class.name} - ${enrollment.section.name}`
       : null;
 
+    let consolidatedInvoice = null;
+    if (activeInvoices.length > 0) {
+      const totalAmount = activeInvoices.reduce(
+        (sum, inv) => sum + Number(inv.totalAmount) + Number(inv.lateFeeAccumulated),
+        0
+      );
+      const paidAmount = activeInvoices.reduce(
+        (sum, inv) => sum + Number(inv.paidAmount),
+        0
+      );
+      const pendingAmount = totalAmount - paidAmount;
+
+      const hasOverdue = activeInvoices.some((inv) => {
+        const isUnpaid = inv.status !== "PAID";
+        const isPastDue = new Date(inv.dueDate) < new Date();
+        return isUnpaid && isPastDue;
+      });
+
+      const status =
+        pendingAmount <= 0
+          ? "PAID"
+          : hasOverdue
+            ? "OVERDUE"
+            : paidAmount > 0
+              ? "PARTIAL"
+              : "PENDING";
+
+      const oldestUnpaid = activeInvoices.find((inv) => inv.status !== "PAID");
+      const dueDate = oldestUnpaid
+        ? oldestUnpaid.dueDate
+        : activeInvoices[activeInvoices.length - 1].dueDate;
+
+      const items: any[] = [];
+      activeInvoices.forEach((inv) => {
+        inv.items.forEach((item) => {
+          items.push({
+            id: item.id,
+            description: `${item.description || "Fee"}${
+              activeInvoices.length > 1 ? ` (${inv.number})` : ""
+            }`,
+            amount: Number(item.amount),
+          });
+        });
+
+        if (Number(inv.lateFeeAccumulated) > 0) {
+          items.push({
+            id: `late-fee-${inv.id}`,
+            description: `Late Fee Penalty (${inv.number})`,
+            amount: Number(inv.lateFeeAccumulated),
+          });
+        }
+      });
+
+      consolidatedInvoice = {
+        id: oldestUnpaid?.id || activeInvoices[activeInvoices.length - 1].id,
+        number: oldestUnpaid?.number || activeInvoices[activeInvoices.length - 1].number,
+        totalAmount,
+        paidAmount,
+        pendingAmount,
+        status,
+        dueDate,
+        items,
+      };
+    }
+
     return apiSuccess({
       student: {
         id: student.id,
@@ -113,23 +181,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         branchName: student.branch.name,
         className,
       },
-      invoice: invoice
-        ? {
-            id: invoice.id,
-            number: invoice.number,
-            totalAmount: Number(invoice.totalAmount),
-            paidAmount: Number(invoice.paidAmount),
-            pendingAmount:
-              Number(invoice.totalAmount) - Number(invoice.paidAmount),
-            status: invoice.status,
-            dueDate: invoice.dueDate,
-            items: invoice.items.map((item) => ({
-              id: item.id,
-              description: item.description,
-              amount: Number(item.amount),
-            })),
-          }
-        : null,
+      invoice: consolidatedInvoice,
       payments: payments.map((p) => ({
         id: p.id,
         receiptNo: p.receiptNo,
@@ -176,7 +228,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       where: {
         id: studentId,
         branch: { organizationId: ctx.organizationId },
-        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId
+        ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId
           ? { branchId: ctx.branchId }
           : {}),
       },
@@ -186,78 +238,126 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return apiNotFound("Student");
     }
 
-    // Find active invoice
-    const invoice = await prisma.invoice.findFirst({
+    // Find active unpaid invoices
+    const unpaidInvoices = await prisma.invoice.findMany({
       where: {
         studentId,
-        status: { not: "CANCELLED" },
+        status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
       },
+      orderBy: { dueDate: "asc" },
     });
 
-    if (!invoice) {
-      return apiError("NOT_FOUND", "No active invoice found for this student", 404);
+    if (unpaidInvoices.length === 0) {
+      return apiError("BAD_REQUEST", "No outstanding dues found for this student", 400);
     }
 
-    const totalAmount = Number(invoice.totalAmount);
-    const paidAmount = Number(invoice.paidAmount);
-    const pendingAmount = totalAmount - paidAmount;
+    let totalPending = 0;
+    unpaidInvoices.forEach((inv) => {
+      totalPending += Number(inv.totalAmount) + Number(inv.lateFeeAccumulated) - Number(inv.paidAmount);
+    });
 
-    if (data.amount > pendingAmount) {
+    if (data.amount > totalPending) {
       return apiError(
-        "VALIDATION_ERROR",
-        `Amount exceeds pending balance of ₹${pendingAmount.toLocaleString("en-IN")}`,
-        422
+        "BAD_REQUEST",
+        `Payment amount of ₹${data.amount} exceeds total outstanding dues of ₹${totalPending}`,
+        400
       );
     }
 
-    // Create payment + update invoice in a transaction
+    // Create payment + update invoices in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      const receiptNo = `RCP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-      const newPaidAmount = paidAmount + data.amount;
-      const newStatus = newPaidAmount >= totalAmount ? "PAID" : "PARTIAL";
+      // 1. Lock all unpaid invoices to prevent concurrency race conditions
+      const freshInvoices = await tx.$queryRaw<any[]>`
+        SELECT id, totalAmount, paidAmount, lateFeeAccumulated, status, number FROM invoices 
+        WHERE studentId = ${studentId} AND status IN ('PENDING', 'PARTIAL', 'OVERDUE') 
+        ORDER BY dueDate ASC 
+        FOR UPDATE
+      `;
 
-      const payment = await tx.feePayment.create({
-        data: {
-          invoiceId: invoice.id,
-          studentId,
-          amount: data.amount,
-          method: data.method,
-          transactionId: data.transactionId || null,
-          receiptNo,
-          paidAt: new Date(data.paidAt),
-          remarks: data.remarks || null,
-        },
-        select: {
-          id: true,
-          receiptNo: true,
-          amount: true,
-          method: true,
-          transactionId: true,
-          paidAt: true,
-          remarks: true,
-        },
-      });
+      let remainingPayment = data.amount;
+      const createdPayments = [];
+      let primaryPayment: any = null;
 
-      await tx.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          paidAmount: newPaidAmount,
-          status: newStatus,
-        },
-      });
+      for (const freshInv of freshInvoices) {
+        if (remainingPayment <= 0) break;
+
+        const invTotal = Number(freshInv.totalAmount) + Number(freshInv.lateFeeAccumulated);
+        const invPaid = Number(freshInv.paidAmount);
+        const invPending = invTotal - invPaid;
+
+        if (invPending <= 0) continue;
+
+        const paymentToApply = Math.min(remainingPayment, invPending);
+        const newPaidAmount = invPaid + paymentToApply;
+        const newStatus = newPaidAmount >= invTotal ? "PAID" : "PARTIAL";
+
+        const receiptNo = await generateUniqueReceiptNo(tx);
+
+        const payment = await tx.feePayment.create({
+          data: {
+            invoiceId: freshInv.id,
+            studentId,
+            amount: paymentToApply,
+            method: data.method,
+            transactionId: data.transactionId || null,
+            receiptNo,
+            paidAt: new Date(data.paidAt),
+            remarks: data.remarks || null,
+          },
+          select: {
+            id: true,
+            receiptNo: true,
+            amount: true,
+            method: true,
+            transactionId: true,
+            paidAt: true,
+            remarks: true,
+          },
+        });
+
+        if (!primaryPayment) {
+          primaryPayment = payment;
+        }
+
+        createdPayments.push(payment);
+
+        await tx.invoice.update({
+          where: { id: freshInv.id },
+          data: {
+            paidAmount: newPaidAmount,
+            status: newStatus,
+          },
+        });
+
+        remainingPayment -= paymentToApply;
+      }
+
+      // Write audit log
+      if (primaryPayment) {
+        await logAction({
+          organizationId: ctx.organizationId,
+          branchId: student.branchId,
+          userId: ctx.userId,
+          action: "CREATE",
+          module: "fees",
+          entityId: primaryPayment.id,
+          details: {
+            receiptNo: primaryPayment.receiptNo,
+            amount: data.amount,
+            studentName: `${student.firstName} ${student.lastName}`,
+            splitCount: createdPayments.length,
+          },
+        });
+      }
 
       return {
-        payment: {
-          ...payment,
-          amount: Number(payment.amount),
-        },
-        invoice: {
-          id: invoice.id,
-          totalAmount,
-          paidAmount: newPaidAmount,
-          pendingAmount: totalAmount - newPaidAmount,
-          status: newStatus,
-        },
+        payment: primaryPayment
+          ? {
+              ...primaryPayment,
+              amount: Number(primaryPayment.amount),
+            }
+          : null,
+        paymentsCount: createdPayments.length,
       };
     }, { timeout: 15000 });
 

@@ -14,23 +14,24 @@ import { createBranchSchema } from "@/lib/validations/branch";
  * GET /api/v1/branches — list branches (lightweight for dropdowns + paginated for list page)
  */
 export async function GET(req: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user) {
-    return apiError("UNAUTHORIZED", "Not authenticated", 401);
-  }
-
+  const ctx = getTenantContext(req);
   const url = new URL(req.url);
   const { page, limit, search } = parsePagination(url);
   const paginated = url.searchParams.get("paginated") === "true";
 
   try {
     if (!paginated) {
-      // Lightweight response for dropdowns (original Behavior)
+      // Lightweight response for dropdowns
+      const dropdownWhere: Record<string, unknown> = {
+        organizationId: ctx.organizationId,
+      };
+
+      if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+        dropdownWhere.id = ctx.branchId;
+      }
+
       const branches = await prisma.branch.findMany({
-        where: {
-          organizationId: session.user.organizationId,
-        },
+        where: dropdownWhere,
         select: {
           id: true,
           name: true,
@@ -48,9 +49,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Paginated response for the list page
+    const denied = await checkApiPermission(req, "branches", "read");
+    if (denied) return denied;
+
     const where: Record<string, unknown> = {
-      organizationId: session.user.organizationId,
+      organizationId: ctx.organizationId,
     };
+
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+      where.id = ctx.branchId;
+    }
 
     if (search) {
       where.OR = [

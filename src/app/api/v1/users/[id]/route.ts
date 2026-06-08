@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     organizationId: ctx.organizationId,
   };
 
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
 
@@ -88,8 +88,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return apiError("FORBIDDEN", "Cannot modify a SUPER_ADMIN user", 403);
     }
 
-    // BRANCH_ADMIN can only edit users in their branch
-    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
+    // Restrict branch-scoped roles from modifying users in another branch
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
       return apiError("FORBIDDEN", "Cannot modify users in another branch", 403);
     }
 
@@ -209,8 +209,8 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       return apiError("FORBIDDEN", "Cannot deactivate your own account", 403);
     }
 
-    // BRANCH_ADMIN can only delete users in their branch
-    if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
+    // Restrict branch-scoped roles from deactivating users in another branch
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
       return apiError("FORBIDDEN", "Cannot deactivate users in another branch", 403);
     }
 

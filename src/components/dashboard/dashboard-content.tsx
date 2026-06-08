@@ -79,6 +79,7 @@ interface DashboardData {
 interface DashboardContentProps {
   userName?: string | null;
   roleName?: string | null;
+  branchId?: string | null;
 }
 
 interface MetricCardProps {
@@ -356,13 +357,14 @@ function DashboardSkeleton() {
   );
 }
 
-export function DashboardContent({ userName, roleName }: DashboardContentProps) {
+export function DashboardContent({ userName, roleName, branchId }: DashboardContentProps) {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/v1/dashboard/stats")
+    setLoading(true);
+    fetch(`/api/v1/dashboard/stats?branchId=${branchId || ""}`)
       .then((res) => res.json())
       .then((resData) => {
         if (resData.success) {
@@ -373,7 +375,7 @@ export function DashboardContent({ userName, roleName }: DashboardContentProps) 
         console.error("Failed to load dashboard stats", err);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [branchId]);
 
   const getGreeting = () => {
     const hr = new Date().getHours();

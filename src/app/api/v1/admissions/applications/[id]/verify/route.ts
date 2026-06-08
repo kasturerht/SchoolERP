@@ -5,6 +5,7 @@ import {
   apiError,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { logAction } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       where: {
         id,
         organizationId: ctx.organizationId,
-        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
+        ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
       },
     });
 
@@ -85,6 +86,20 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         include: { documents: true, examResult: true },
       });
     }, { timeout: 15000 });
+
+    if (!updated) {
+      return apiError("NOT_FOUND", "Application not found after update", 404);
+    }
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: updated.branchId,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "ADMISSIONS",
+      entityId: updated.id,
+      details: { applicationNo: updated.applicationNo, status: updated.status, context: "DOCUMENT_VERIFICATION" }
+    });
 
     return apiSuccess(updated);
   } catch (error) {

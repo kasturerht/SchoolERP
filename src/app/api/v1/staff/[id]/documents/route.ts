@@ -9,6 +9,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_SIZE,
 } from "@/lib/upload";
+import { logAction } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,7 +24,7 @@ async function verifyStaffAccess(
     id: staffId,
     branch: { organizationId: ctx.organizationId },
   };
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   }
   return prisma.staff.findFirst({ where, select: { id: true } });
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const staff = await verifyStaffAccess(id, ctx);
   if (!staff) return apiNotFound("Staff member");
 
-  let formData: FormData;
+  let formData: any;
   try {
     formData = await req.formData();
   } catch {
@@ -152,6 +153,16 @@ export async function POST(req: NextRequest, context: RouteContext) {
         mimeType: true,
         createdAt: true,
       },
+    });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: ctx.branchId,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "STAFF",
+      entityId: id,
+      details: { documentId: document.id, label: document.label, context: "STAFF_DOCUMENT_UPLOAD" }
     });
 
     return apiSuccess(document, undefined, 201);

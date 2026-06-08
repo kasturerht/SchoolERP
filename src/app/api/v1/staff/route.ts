@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
     branch: { organizationId: ctx.organizationId },
   };
 
-  // BRANCH_ADMIN can only see staff in their branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -104,8 +104,8 @@ export async function POST(req: NextRequest) {
 
   const { name, email, phone, roleId, dateOfBirth, gender, qualification, joinDate, branchId, createAccount, password, customPermissions } = parsed.data;
 
-  // BRANCH_ADMIN can only create staff in their own branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
+  // Restrict branch-scoped roles from creating staff in another branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create staff in another branch", 403);
   }
 
@@ -194,8 +194,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Auto-generate employeeId
-    const employeeId = `STF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    // Auto-generate employeeId with retry logic
+    let employeeId = "";
+    for (let i = 0; i < 5; i++) {
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const randomSuffix = crypto.randomBytes(2).toString("hex").toUpperCase();
+      employeeId = `STF-${dateStr}-${randomSuffix}`;
+      const exists = await prisma.staff.findFirst({ where: { employeeId }, select: { id: true } });
+      if (!exists) break;
+    }
+    if (!employeeId) {
+      employeeId = `STF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    }
 
     const staff = await prisma.staff.create({
       data: {
@@ -223,6 +233,16 @@ export async function POST(req: NextRequest) {
         status: true,
         branch: { select: { id: true, name: true } },
       },
+    });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: staff.branch.id,
+      userId: ctx.userId,
+      action: "CREATE",
+      module: "STAFF",
+      entityId: staff.id,
+      details: { name: staff.name, employeeId: staff.employeeId, role: staff.role },
     });
 
     return apiSuccess(staff, undefined, 201);

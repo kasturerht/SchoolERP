@@ -5,6 +5,7 @@ import {
   apiError,
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { logAction } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -38,13 +39,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return apiError("BAD_REQUEST", "Missing required fields (examDate, maxMarks, verdict)", 400);
   }
 
+  if (marksObtained !== undefined && (marksObtained > maxMarks || marksObtained < 0)) {
+    return apiError("BAD_REQUEST", "Marks obtained must be between 0 and maxMarks", 400);
+  }
+
   try {
     // 1. Verify application exists and belongs to organization/branch scope
     const application = await prisma.admissionApplication.findFirst({
       where: {
         id,
         organizationId: ctx.organizationId,
-        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
+        ...(ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
       },
     });
 
@@ -86,6 +91,16 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       return app;
     }, { timeout: 15000 });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: result.branchId,
+      userId: ctx.userId,
+      action: "UPDATE",
+      module: "ADMISSIONS",
+      entityId: result.id,
+      details: { applicationNo: result.applicationNo, verdict, marksObtained, maxMarks, context: "SCHEDULE_TEST" }
+    });
 
     return apiSuccess(result);
   } catch (error) {

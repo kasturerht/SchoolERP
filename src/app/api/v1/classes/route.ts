@@ -5,7 +5,7 @@ import {
   apiError,
   apiValidationError,
 } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
 import { createClassSchema } from "@/lib/validations/class";
 
 /**
@@ -27,7 +27,10 @@ export async function GET(req: NextRequest) {
       const where: Record<string, unknown> = {
         branch: { organizationId: ctx.organizationId },
       };
-      if (branchId) {
+      
+      if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+        where.branchId = ctx.branchId;
+      } else if (branchId) {
         where.branchId = branchId;
       }
 
@@ -76,19 +79,29 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Lightweight response for student form dropdown (original behaviour)
-  const denied = await checkApiPermission(req, "students", "read");
-  if (denied) return denied;
+  // Lightweight response for student/inquiry form dropdown (original behaviour)
+  const allowed = (await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "students", "read")) ||
+                  (await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "inquiry_desk")) ||
+                  (await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "admissions", "document_verification")) ||
+                  (await hasPermission(ctx.userId, ctx.roleId, ctx.roleName, "classes", "read"));
+  if (!allowed) {
+    return apiError("FORBIDDEN", "Insufficient permissions", 403);
+  }
 
   const branchId = url.searchParams.get("branchId");
+  
+  let targetBranchId = branchId;
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+    targetBranchId = ctx.branchId;
+  }
 
-  if (!branchId) {
+  if (!targetBranchId) {
     return apiError("BAD_REQUEST", "branchId is required", 400);
   }
 
   // Verify branch belongs to organization
   const branch = await prisma.branch.findFirst({
-    where: { id: branchId, organizationId: ctx.organizationId, isActive: true },
+    where: { id: targetBranchId, organizationId: ctx.organizationId, isActive: true },
   });
   if (!branch) {
     return apiError("NOT_FOUND", "Branch not found", 404);
@@ -111,7 +124,7 @@ export async function GET(req: NextRequest) {
 
     const classes = await prisma.class.findMany({
       where: {
-        branchId,
+        branchId: targetBranchId,
         academicYearId: targetYearId,
       },
       select: {
@@ -150,8 +163,25 @@ export async function POST(req: NextRequest) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, numericGrade, branchId, academicYearId, sections, fees, subjectMasterIds } =
+  const { name, numericGrade, branchId, academicYearId, sections, fees, installments, subjectMasterIds } =
     parsed.data;
+
+  // Enforce sum match for installments if provided
+  const totalFeesAmount = fees.reduce((sum, f) => sum + f.amount, 0);
+  const totalInstallmentsAmount = installments.reduce((sum, inst) => sum + inst.amount, 0);
+
+  if (installments.length > 0 && Math.abs(totalFeesAmount - totalInstallmentsAmount) > 0.01) {
+    return apiError(
+      "BAD_REQUEST",
+      `The sum of installments (₹${totalInstallmentsAmount.toLocaleString("en-IN")}) must equal the total fee amount (₹${totalFeesAmount.toLocaleString("en-IN")}).`,
+      400
+    );
+  }
+
+  // Restrict branch-scoped roles from creating classes in another branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
+    return apiError("FORBIDDEN", "Cannot create class in another branch", 403);
+  }
 
   try {
     // Verify branch belongs to organization
@@ -298,6 +328,22 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Create installment templates
+      for (const inst of installments) {
+        await tx.feeInstallmentTemplate.create({
+          data: {
+            classId: cls.id,
+            academicYearId,
+            name: inst.name,
+            amount: inst.amount,
+            dueDate: new Date(inst.dueDate),
+            lateFeeActive: inst.lateFeeActive,
+            lateFeePerDay: inst.lateFeePerDay,
+            lateFeeGrace: inst.lateFeeGrace,
+          },
+        });
+      }
+
       return cls;
     }, { timeout: 30000 });
 
@@ -320,6 +366,9 @@ export async function POST(req: NextRequest) {
         },
         feeStructures: {
           include: { feeCategory: { select: { name: true } } },
+        },
+        feeInstallmentTemplates: {
+          orderBy: { dueDate: "asc" },
         },
         branch: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },

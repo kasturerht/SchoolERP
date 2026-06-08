@@ -51,6 +51,16 @@ interface FeeRow {
   amount: number | string;
 }
 
+interface InstallmentRow {
+  id?: string;
+  name: string;
+  amount: number | string;
+  dueDate: string;
+  lateFeeActive: boolean;
+  lateFeePerDay: number | string;
+  lateFeeGrace: number | string;
+}
+
 interface ClassData {
   id: string;
   name: string;
@@ -79,6 +89,15 @@ interface ClassData {
     amount: number | string;
     frequency: string;
     feeCategory: { name: string };
+  }>;
+  feeInstallmentTemplates?: Array<{
+    id: string;
+    name: string;
+    amount: number | string;
+    dueDate: string | Date;
+    lateFeeActive: boolean;
+    lateFeePerDay: number | string;
+    lateFeeGrace: number | string;
   }>;
   branch: { id: string; name: string };
   academicYear: { id: string; name: string };
@@ -146,6 +165,18 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       id: f.id,
       name: f.feeCategory.name,
       amount: Number(f.amount),
+    })) ?? []
+  );
+
+  const [installments, setInstallments] = useState<InstallmentRow[]>(() =>
+    initialData?.feeInstallmentTemplates?.map((t) => ({
+      id: t.id,
+      name: t.name,
+      amount: Number(t.amount),
+      dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split("T")[0] : "",
+      lateFeeActive: t.lateFeeActive,
+      lateFeePerDay: Number(t.lateFeePerDay),
+      lateFeeGrace: Number(t.lateFeeGrace),
     })) ?? []
   );
 
@@ -360,6 +391,37 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     );
   }
 
+  // Installment helpers
+  function addInstallment() {
+    setInstallments((prev) => [
+      ...prev,
+      {
+        name: "",
+        amount: "",
+        dueDate: "",
+        lateFeeActive: false,
+        lateFeePerDay: 0,
+        lateFeeGrace: 0,
+      },
+    ]);
+  }
+
+  function removeInstallment(index: number) {
+    setInstallments((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateInstallment(index: number, field: keyof InstallmentRow, value: any) {
+    setInstallments((prev) =>
+      prev.map((inst, i) => (i === index ? { ...inst, [field]: value } : inst))
+    );
+  }
+
+  const installmentsTotal = installments.reduce((sum, inst) => {
+    const amt = typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount;
+    if (isNaN(amt) || amt <= 0) return sum;
+    return sum + amt;
+  }, 0);
+
   const annualTotal = fees.reduce((sum, f) => {
     const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
     if (isNaN(amt) || amt <= 0) return sum;
@@ -369,6 +431,34 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrors({});
+
+    const totalFeesAmount = fees.reduce((sum, f) => {
+      const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
+      return sum + (isNaN(amt) ? 0 : amt);
+    }, 0);
+
+    const totalInstallmentsAmount = installments.reduce((sum, inst) => {
+      const amt = typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount;
+      return sum + (isNaN(amt) ? 0 : amt);
+    }, 0);
+
+    if (installments.length > 0 && Math.abs(totalFeesAmount - totalInstallmentsAmount) > 0.01) {
+      snackbar.show(
+        `The sum of installments (₹${totalInstallmentsAmount.toLocaleString("en-IN")}) must equal the total fee amount (₹${totalFeesAmount.toLocaleString("en-IN")}).`,
+        "error"
+      );
+      return;
+    }
+
+    const formattedInstallments = installments.map((inst) => ({
+      ...(inst.id ? { id: inst.id } : {}),
+      name: inst.name,
+      amount: typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount,
+      dueDate: inst.dueDate,
+      lateFeeActive: inst.lateFeeActive,
+      lateFeePerDay: typeof inst.lateFeePerDay === "string" ? parseFloat(inst.lateFeePerDay) : inst.lateFeePerDay,
+      lateFeeGrace: typeof inst.lateFeeGrace === "string" ? parseInt(inst.lateFeeGrace, 10) : inst.lateFeeGrace,
+    }));
 
     if (mode === "create") {
       const formFields = {
@@ -389,6 +479,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           amount:
             typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
         })),
+        installments: formattedInstallments,
       };
 
       const result = createClassSchema.safeParse(formFields);
@@ -449,6 +540,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           amount:
             typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
         })),
+        installments: formattedInstallments,
       };
 
       const result = updateClassSchema.safeParse(formFields);
@@ -571,6 +663,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="divisions">Divisions</TabsTrigger>
+              <TabsTrigger value="installments">Installment Plan</TabsTrigger>
             </TabsList>
 
             {/* ── Details Tab ── */}
@@ -915,6 +1008,179 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                     )}
                   </div>
                 ))}
+              </div>
+            </TabsContent>
+
+            {/* ── Installments Tab ── */}
+            <TabsContent value="installments" className="mt-5 space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-label-lg font-medium text-on-surface">
+                      Installment Plan & Late Fee Rules
+                    </p>
+                    <p className="text-body-sm text-on-surface-variant mt-0.5">
+                      Configure standard due dates and late fees for parent payments.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="text"
+                    icon="add"
+                    onClick={addInstallment}
+                  >
+                    Add Installment
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  {installments.map((inst, index) => (
+                    <div
+                      key={index}
+                      className="rounded-md border border-outline-variant p-4 space-y-4 bg-slate-50/35"
+                    >
+                      <div className="flex justify-between items-center">
+                        <p className="text-label-md font-bold text-on-surface">
+                          Installment #{index + 1}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => removeInstallment(index)}
+                          className="rounded-full p-2 hover:bg-surface-container-high text-on-surface-variant"
+                        >
+                          <Icon name="close" size={20} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <TextField
+                          label="Installment Name"
+                          placeholder="e.g. Admission / Term 1"
+                          value={inst.name}
+                          onChange={(e) =>
+                            updateInstallment(index, "name", e.target.value)
+                          }
+                          error={errors[`installments.${index}.name`]}
+                          required
+                          fullWidth
+                        />
+                        <TextField
+                          label="Amount (₹)"
+                          type="number"
+                          placeholder="e.g. 15000"
+                          value={inst.amount.toString()}
+                          onChange={(e) =>
+                            updateInstallment(index, "amount", e.target.value)
+                          }
+                          error={errors[`installments.${index}.amount`]}
+                          required
+                          fullWidth
+                        />
+                        <TextField
+                          label="Due Date"
+                          type="date"
+                          value={inst.dueDate}
+                          onChange={(e) =>
+                            updateInstallment(index, "dueDate", e.target.value)
+                          }
+                          error={errors[`installments.${index}.dueDate`]}
+                          required
+                          fullWidth
+                        />
+                      </div>
+
+                      {/* Late fee subform */}
+                      <div className="pt-2 border-t border-dashed border-outline-variant/50 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`late-fee-active-${index}`}
+                            checked={inst.lateFeeActive}
+                            onChange={(e) =>
+                              updateInstallment(index, "lateFeeActive", e.target.checked)
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40"
+                          />
+                          <label
+                            htmlFor={`late-fee-active-${index}`}
+                            className="text-label-md font-medium text-on-surface cursor-pointer select-none"
+                          >
+                            Apply Late Fees
+                          </label>
+                        </div>
+
+                        {inst.lateFeeActive && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
+                            <TextField
+                              label="Penalty Rate (₹ per day)"
+                              type="number"
+                              placeholder="e.g. 50"
+                              value={inst.lateFeePerDay.toString()}
+                              onChange={(e) =>
+                                updateInstallment(index, "lateFeePerDay", e.target.value)
+                              }
+                              error={errors[`installments.${index}.lateFeePerDay`]}
+                              required
+                              fullWidth
+                            />
+                            <TextField
+                              label="Grace Days (before penalty starts)"
+                              type="number"
+                              placeholder="e.g. 2"
+                              value={inst.lateFeeGrace.toString()}
+                              onChange={(e) =>
+                                updateInstallment(index, "lateFeeGrace", e.target.value)
+                              }
+                              error={errors[`installments.${index}.lateFeeGrace`]}
+                              required
+                              fullWidth
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {installments.length === 0 && (
+                    <div className="p-8 text-center border border-dashed rounded-xl bg-slate-50/50">
+                      <p className="text-body-md text-on-surface-variant font-medium">
+                        No installments configured
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Click &ldquo;Add Installment&rdquo; to define a payment schedule.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {installmentsTotal > 0 && (
+                  <div className="mt-4 pt-4 border-t flex justify-between items-center text-label-lg text-on-surface">
+                    <div>
+                      <span>Total Fees Configured: </span>
+                      <strong className="font-semibold text-primary">
+                        ₹{annualTotal.toLocaleString("en-IN")}
+                      </strong>
+                    </div>
+                    <div className="text-right">
+                      <span>Installments Sum: </span>
+                      <strong
+                        className={`font-semibold ${
+                          Math.abs(annualTotal - installmentsTotal) > 0.01
+                            ? "text-error"
+                            : "text-success"
+                        }`}
+                      >
+                        ₹{installmentsTotal.toLocaleString("en-IN")}
+                      </strong>
+                      {Math.abs(annualTotal - installmentsTotal) > 0.01 && (
+                        <p className="text-[10px] text-error mt-0.5 font-normal">
+                          Mismatch: Difference of ₹
+                          {Math.abs(annualTotal - installmentsTotal).toLocaleString("en-IN")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>

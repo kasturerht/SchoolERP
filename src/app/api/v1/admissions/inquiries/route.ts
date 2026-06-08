@@ -8,6 +8,7 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import { createInquirySchema } from "@/lib/validations/admission";
+import { logAction } from "@/lib/audit";
 
 /**
  * GET /api/v1/admissions/inquiries — List and filter inquiries with tenancy checking
@@ -27,8 +28,8 @@ export async function GET(req: NextRequest) {
     organizationId: ctx.organizationId,
   };
 
-  // Enforce branch scope if branch admin
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -98,8 +99,8 @@ export async function POST(req: NextRequest) {
 
   const data = parsed.data;
 
-  // Branch Admins are locked to their own branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create inquiry in another branch", 403);
   }
 
@@ -148,6 +149,16 @@ export async function POST(req: NextRequest) {
         classApplied: { select: { id: true, name: true } },
         branch: { select: { id: true, name: true } },
       },
+    });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: inquiry.branchId,
+      userId: ctx.userId,
+      action: "CREATE",
+      module: "ADMISSIONS",
+      entityId: inquiry.id,
+      details: { studentName: inquiry.studentName, status: inquiry.status, context: "ADMISSION_INQUIRY" }
     });
 
     return apiSuccess(inquiry, undefined, 201);

@@ -36,6 +36,15 @@ interface ClassData {
     frequency: string;
     feeCategory: { name: string };
   }>;
+  feeInstallmentTemplates?: Array<{
+    id: string;
+    name: string;
+    amount: number | string;
+    dueDate: string | Date;
+    lateFeeActive: boolean;
+    lateFeePerDay: number | string;
+    lateFeeGrace: number | string;
+  }>;
   branch: { id: string; name: string };
   academicYear: { id: string; name: string };
 }

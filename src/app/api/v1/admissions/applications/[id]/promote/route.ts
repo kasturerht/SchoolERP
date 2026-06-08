@@ -6,6 +6,8 @@ import {
 } from "@/lib/api-helpers";
 import { checkApiPermission, getTenantContext } from "@/lib/rbac";
 import crypto from "crypto";
+import { generateUniqueAdmissionNo, generateUniqueInvoiceNo, generateUniqueReceiptNo } from "@/lib/unique-id";
+import { logAction } from "@/lib/audit";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -34,6 +36,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     amountPaid,
     paymentMethod,
     transactionId,
+    installments,
   } = body as {
     sectionId: string;
     rollNo?: string;
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     amountPaid?: number;
     paymentMethod?: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
     transactionId?: string;
+    installments?: { templateId: string; amount: number }[];
   };
 
   if (!sectionId) {
@@ -49,12 +53,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   try {
+    // Restrict branch-scoped roles to their home branch
+    const branchScope = ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId
+      ? { branchId: ctx.branchId }
+      : {};
+
     // 1. Verify application exists and belongs to organization/branch scope
     const application = await prisma.admissionApplication.findFirst({
       where: {
         id,
         organizationId: ctx.organizationId,
-        ...(ctx.roleName === "BRANCH_ADMIN" && ctx.branchId ? { branchId: ctx.branchId } : {}),
+        ...branchScope,
       },
       include: {
         documents: true,
@@ -67,6 +76,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     if (application.status === "ADMITTED") {
       return apiError("CONFLICT", "Candidate has already been admitted", 409);
+    }
+
+    // Verify age validation: student must be at least 3 years old on admission date
+    const dob = new Date(application.dateOfBirth);
+    const admDate = admissionDate ? new Date(admissionDate) : new Date();
+    const ageAtAdmission = (admDate.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    if (ageAtAdmission < 3.0) {
+      return apiError("BAD_REQUEST", "Student must be at least 3 years old on the admission date", 400);
     }
 
     // 2. Verify section exists and links to the correct class/branch
@@ -90,7 +107,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // 3. Promote candidate in a database transaction
     const student = await prisma.$transaction(async (tx) => {
       // Create student admission number
-      const admissionNo = `ADM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const admissionNo = await generateUniqueAdmissionNo(tx);
 
       // Create official Student record
       const studentRecord = await tx.student.create({
@@ -138,76 +155,180 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       });
 
       if (feeStructures.length > 0) {
-        const feeItems = feeStructures.map((fs) => {
+        // Compute standard annual fees for each category
+        const feeCategoriesAnnual = feeStructures.map((fs) => {
           const base = Number(fs.amount);
-          let annual: number;
+          let annual = base;
           switch (fs.frequency) {
-            case "MONTHLY":
-              annual = base * 12;
-              break;
-            case "QUARTERLY":
-              annual = base * 4;
-              break;
-            case "SEMI_ANNUAL":
-              annual = base * 2;
-              break;
-            default:
-              annual = base;
+            case "MONTHLY": annual = base * 12; break;
+            case "QUARTERLY": annual = base * 4; break;
+            case "SEMI_ANNUAL": annual = base * 2; break;
+            default: annual = base;
           }
           return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
         });
 
-        const annualTotal = feeItems.reduce((s, f) => s + f.annual, 0);
+        const annualTotal = feeCategoriesAnnual.reduce((s, f) => s + f.annual, 0);
         const discountPct = discountPercent ?? 0;
-        const discountedTotal = annualTotal * (1 - discountPct / 100);
-        const paid = Math.min(amountPaid ?? 0, discountedTotal);
+        const discountMultiplier = 1 - discountPct / 100;
 
-        let invoiceStatus: "PENDING" | "PARTIAL" | "PAID" = "PENDING";
-        if (paid > 0 && paid >= discountedTotal) {
-          invoiceStatus = "PAID";
-        } else if (paid > 0) {
-          invoiceStatus = "PARTIAL";
+        // 1. Check if installment templates are setup or provided
+        let targetInstallments: { name: string; amount: number; dueDate: Date; lateFeeActive: boolean; lateFeePerDay: number; lateFeeGrace: number }[] = [];
+        
+        if (installments && installments.length > 0) {
+          // Resolve templates matching the IDs passed in request
+          const templateIds = installments.map(i => i.templateId);
+          const matchedTemplates = await tx.feeInstallmentTemplate.findMany({
+            where: { id: { in: templateIds } },
+          });
+
+          targetInstallments = installments.map(inst => {
+            const temp = matchedTemplates.find(t => t.id === inst.templateId);
+            return {
+              name: temp?.name || "Installment",
+              amount: inst.amount,
+              dueDate: temp?.dueDate || new Date(),
+              lateFeeActive: temp?.lateFeeActive || false,
+              lateFeePerDay: temp ? Number(temp.lateFeePerDay) : 0,
+              lateFeeGrace: temp?.lateFeeGrace || 0,
+            };
+          });
+        } else {
+          // Query standard class templates from DB
+          const classTemplates = await tx.feeInstallmentTemplate.findMany({
+            where: {
+              classId: application.classId,
+              academicYearId: application.academicYearId,
+            },
+            orderBy: { dueDate: "asc" },
+          });
+
+          if (classTemplates.length > 0) {
+            targetInstallments = classTemplates.map(t => ({
+              name: t.name,
+              amount: Number(t.amount),
+              dueDate: t.dueDate,
+              lateFeeActive: t.lateFeeActive,
+              lateFeePerDay: Number(t.lateFeePerDay),
+              lateFeeGrace: t.lateFeeGrace,
+            }));
+          }
         }
 
-        const invoiceNo = `INV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 30);
+        const createdInvoices = [];
 
-        const invoice = await tx.invoice.create({
-          data: {
-            studentId: studentRecord.id,
-            number: invoiceNo,
-            year: new Date().getFullYear(),
-            totalAmount: discountedTotal,
-            paidAmount: paid,
-            status: invoiceStatus,
-            dueDate,
-            items: {
-              create: feeItems.map((fi) => {
-                const itemDiscounted = fi.annual * (1 - discountPct / 100);
-                return {
-                  feeStructureId: fi.feeStructureId,
-                  amount: itemDiscounted,
-                  description: fi.name,
-                };
-              }),
-            },
-          },
-        });
+        if (targetInstallments.length > 0) {
+          // Generate proportional invoices based on installment templates
+          const totalTemplateAmount = targetInstallments.reduce((sum, inst) => sum + inst.amount, 0);
 
-        // Log Payment if amountPaid > 0
-        if (paid > 0 && paymentMethod) {
-          const receiptNo = `RCP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-          await tx.feePayment.create({
+          for (const inst of targetInstallments) {
+            const invoiceNo = await generateUniqueInvoiceNo(tx);
+            const installmentDiscountedTotal = inst.amount * discountMultiplier;
+
+            // Make sure due dates in the past are bumped to today/admission date if desired
+            let finalDueDate = new Date(inst.dueDate);
+            const today = new Date();
+            if (finalDueDate < today) {
+              finalDueDate = today;
+            }
+
+            const invoice = await tx.invoice.create({
+              data: {
+                studentId: studentRecord.id,
+                number: invoiceNo,
+                year: new Date().getFullYear(),
+                totalAmount: installmentDiscountedTotal,
+                paidAmount: 0,
+                status: "PENDING",
+                dueDate: finalDueDate,
+                lateFeeActive: inst.lateFeeActive,
+                lateFeePerDay: inst.lateFeePerDay,
+                lateFeeGrace: inst.lateFeeGrace,
+                items: {
+                  create: feeCategoriesAnnual.map((fi) => {
+                    const proportionalAmount = totalTemplateAmount > 0 
+                      ? fi.annual * (inst.amount / totalTemplateAmount) * discountMultiplier 
+                      : 0;
+                    return {
+                      feeStructureId: fi.feeStructureId,
+                      amount: proportionalAmount,
+                      description: `${fi.name} - ${inst.name}`,
+                    };
+                  }),
+                },
+              },
+            });
+
+            createdInvoices.push(invoice);
+          }
+        } else {
+          // Fallback to single consolidated annual invoice
+          const invoiceNo = await generateUniqueInvoiceNo(tx);
+          const discountedTotal = annualTotal * discountMultiplier;
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 30);
+
+          const invoice = await tx.invoice.create({
             data: {
-              invoiceId: invoice.id,
               studentId: studentRecord.id,
-              amount: paid,
-              method: paymentMethod,
-              transactionId: transactionId || null,
-              receiptNo,
+              number: invoiceNo,
+              year: new Date().getFullYear(),
+              totalAmount: discountedTotal,
+              paidAmount: 0,
+              status: "PENDING",
+              dueDate,
+              items: {
+                create: feeCategoriesAnnual.map((fi) => ({
+                  feeStructureId: fi.feeStructureId,
+                  amount: fi.annual * discountMultiplier,
+                  description: fi.name,
+                })),
+              },
             },
           });
+
+          createdInvoices.push(invoice);
+        }
+
+        // Apply dynamic payment rollover
+        let remainingPayment = amountPaid ?? 0;
+        
+        if (remainingPayment > 0 && paymentMethod) {
+          // Sort created invoices by dueDate ascending
+          createdInvoices.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+          for (const inv of createdInvoices) {
+            if (remainingPayment <= 0) break;
+
+            const invTotal = Number(inv.totalAmount);
+            const paymentToApply = Math.min(remainingPayment, invTotal);
+            const newPaidAmount = paymentToApply;
+            const newStatus = newPaidAmount >= invTotal ? "PAID" : "PARTIAL";
+
+            const receiptNo = await generateUniqueReceiptNo(tx);
+
+            await tx.feePayment.create({
+              data: {
+                invoiceId: inv.id,
+                studentId: studentRecord.id,
+                amount: paymentToApply,
+                method: paymentMethod,
+                transactionId: transactionId || null,
+                receiptNo,
+                paidAt: new Date(),
+              },
+            });
+
+            await tx.invoice.update({
+              where: { id: inv.id },
+              data: {
+                paidAmount: newPaidAmount,
+                status: newStatus,
+              },
+            });
+
+            remainingPayment -= paymentToApply;
+          }
         }
       }
 
@@ -219,6 +340,26 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       return studentRecord;
     }, { timeout: 30000 });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: student.branchId,
+      userId: ctx.userId,
+      action: "CREATE",
+      module: "STUDENTS",
+      entityId: student.id,
+      details: { admissionNo: student.admissionNo, name: `${student.firstName} ${student.lastName}`, promotedFrom: id }
+    });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: student.branchId,
+      userId: ctx.userId,
+      action: "PROMOTE",
+      module: "ADMISSIONS",
+      entityId: id,
+      details: { applicationNo: application.applicationNo, studentId: student.id }
+    });
 
     return apiSuccess(student, undefined, 201);
   } catch (error) {

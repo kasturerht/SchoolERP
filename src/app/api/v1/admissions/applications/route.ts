@@ -9,6 +9,8 @@ import {
 import { checkApiPermission, getTenantContext, hasPermission } from "@/lib/rbac";
 import { createApplicationSchema } from "@/lib/validations/admission";
 import crypto from "crypto";
+import { generateUniqueApplicationNo } from "@/lib/unique-id";
+import { logAction } from "@/lib/audit";
 
 /**
  * GET /api/v1/admissions/applications — List and filter applications
@@ -39,8 +41,8 @@ export async function GET(req: NextRequest) {
     organizationId: ctx.organizationId,
   };
 
-  // Enforce branch scope if branch admin
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId) {
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
     where.branchId = ctx.branchId;
   } else if (branchId) {
     where.branchId = branchId;
@@ -112,8 +114,8 @@ export async function POST(req: NextRequest) {
 
   const data = parsed.data;
 
-  // Branch Admins are locked to their own branch
-  if (ctx.roleName === "BRANCH_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && data.branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create application in another branch", 403);
   }
 
@@ -142,12 +144,9 @@ export async function POST(req: NextRequest) {
       return apiError("NOT_FOUND", "Academic year not found", 404);
     }
 
-    // Generate unique application number: APP-YEAR-HEX
-    const year = new Date().getFullYear();
-    const rand = crypto.randomBytes(3).toString("hex").toUpperCase();
-    const applicationNo = `APP-${year}-${rand}`;
-
     const application = await prisma.$transaction(async (tx) => {
+      const applicationNo = await generateUniqueApplicationNo(tx);
+
       const created = await tx.admissionApplication.create({
         data: {
           inquiryId: data.inquiryId || null,
@@ -187,6 +186,16 @@ export async function POST(req: NextRequest) {
 
       return created;
     }, { timeout: 15000 });
+
+    await logAction({
+      organizationId: ctx.organizationId,
+      branchId: application.branchId,
+      userId: ctx.userId,
+      action: "CREATE",
+      module: "ADMISSIONS",
+      entityId: application.id,
+      details: { applicationNo: application.applicationNo, name: `${application.firstName} ${application.lastName}` }
+    });
 
     return apiSuccess(application, undefined, 201);
   } catch (error) {

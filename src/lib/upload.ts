@@ -2,6 +2,42 @@ import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
 
+/**
+ * Zero-dependency magic byte validation for JPEG, PNG, and WebP images.
+ * Prevents MIME-type spoofing of scripts or executables.
+ */
+export function isValidImageMagicBytes(buffer: Buffer): boolean {
+  if (buffer.length < 12) return false;
+
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return true;
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4E &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0D &&
+    buffer[5] === 0x0A &&
+    buffer[6] === 0x1A &&
+    buffer[7] === 0x0A
+  ) {
+    return true;
+  }
+
+  // WebP: RIFF (52 49 46 46) at offset 0 and WEBP (57 41 56 45) at offset 8
+  const isRiff = buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46;
+  const isWebp = buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+  if (isRiff && isWebp) {
+    return true;
+  }
+
+  return false;
+}
+
 export const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
@@ -122,6 +158,13 @@ export async function saveUploadedImage(
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  // Enforce magic bytes verification to prevent header spoofing
+  if (!isValidImageMagicBytes(buffer)) {
+    throw new UploadError(
+      "File content validation failed. The file structure is not a valid JPEG, PNG, or WebP image."
+    );
+  }
 
   // Optimize with Sharp — resize and convert to WebP
   const maxDim = purpose === "photo" ? 400 : 1200;

@@ -94,16 +94,34 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       allowOverride,
     } = parsed.data;
 
+    if (allowOverride && ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN") {
+      return apiError(
+        "FORBIDDEN",
+        "You do not have permission to override outstanding dues lock.",
+        403
+      );
+    }
+
     // 3. Check for pending dues
     if (!allowOverride) {
-      const invoiceAgg = await prisma.invoice.aggregate({
+      const activeInvoices = await prisma.invoice.findMany({
         where: { studentId: id, status: { notIn: ["CANCELLED", "PAID"] } },
-        _sum: { totalAmount: true, paidAmount: true },
+        select: {
+          totalAmount: true,
+          paidAmount: true,
+          lateFeeAccumulated: true,
+          lateFeeWaived: true,
+        },
       });
 
-      const totalFees = Number(invoiceAgg._sum.totalAmount ?? 0);
-      const totalPaid = Number(invoiceAgg._sum.paidAmount ?? 0);
-      const pendingAmount = totalFees - totalPaid;
+      let pendingAmount = 0;
+      for (const inv of activeInvoices) {
+        const invTotal = Number(inv.totalAmount) + (inv.lateFeeWaived ? 0 : Number(inv.lateFeeAccumulated));
+        const invPaid = Number(inv.paidAmount);
+        if (invTotal > invPaid) {
+          pendingAmount += (invTotal - invPaid);
+        }
+      }
 
       if (pendingAmount > 0) {
         return apiError(

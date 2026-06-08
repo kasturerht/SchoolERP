@@ -24,6 +24,19 @@ const inlineFeeSchema = z.object({
   amount: z.number().positive("Amount must be positive"),
 });
 
+const inlineInstallmentSchema = z.object({
+  id: z.string().optional(),
+  name: z
+    .string()
+    .min(1, "Installment name is required")
+    .max(100, "Installment name must be at most 100 characters"),
+  amount: z.number().positive("Amount must be positive"),
+  dueDate: z.string().min(1, "Due date is required"),
+  lateFeeActive: z.boolean().default(false),
+  lateFeePerDay: z.number().nonnegative("Late fee per day must be at least 0").default(0),
+  lateFeeGrace: z.number().int().nonnegative("Grace days must be at least 0").default(0),
+});
+
 export const createClassSchema = z.object({
   name: z
     .string()
@@ -41,6 +54,7 @@ export const createClassSchema = z.object({
     .array(sectionSchema)
     .min(1, "At least one division is required"),
   fees: z.array(inlineFeeSchema).default([]),
+  installments: z.array(inlineInstallmentSchema).default([]),
 });
 
 // For update, subjects are expressed as an array of { id } (keep) or { subjectMasterId } (add new)
@@ -66,6 +80,7 @@ export const updateClassSchema = z.object({
   subjects: z.array(updateSubjectEntry).optional(),
   sections: z.array(sectionSchema).optional(),
   fees: z.array(inlineFeeSchema).optional(),
+  installments: z.array(inlineInstallmentSchema).optional(),
 });
 
 export type CreateClassInput = z.infer<typeof createClassSchema>;

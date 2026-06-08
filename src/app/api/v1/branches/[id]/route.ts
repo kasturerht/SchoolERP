@@ -21,6 +21,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
   const ctx = getTenantContext(req);
   const { id } = await context.params;
 
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && id !== ctx.branchId) {
+    return apiError("FORBIDDEN", "Cannot access details of another branch", 403);
+  }
+
   try {
     const branch = await prisma.branch.findFirst({
       where: {
@@ -60,6 +65,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   const ctx = getTenantContext(req);
   const { id } = await context.params;
+
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && id !== ctx.branchId) {
+    return apiError("FORBIDDEN", "Cannot access details of another branch", 403);
+  }
 
   let body: unknown;
   try {
@@ -140,6 +150,11 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
   const ctx = getTenantContext(req);
   const { id } = await context.params;
+
+  // Restrict branch-scoped roles to their home branch
+  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && id !== ctx.branchId) {
+    return apiError("FORBIDDEN", "Cannot access details of another branch", 403);
+  }
 
   try {
     const existing = await prisma.branch.findFirst({
