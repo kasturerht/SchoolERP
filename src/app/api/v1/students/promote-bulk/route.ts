@@ -16,6 +16,7 @@ const promoteBulkSchema = z.object({
   targetSectionId: z.string().min(1, "Target section is required"),
   targetAcademicYearId: z.string().min(1, "Target academic year is required"),
   discountPercent: z.number().min(0).max(100).default(0),
+  termType: z.enum(["FULL_TERM", "HALF_TERM", "SHORT_TERM"]).optional(),
 });
 
 /**
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     const parsed = promoteBulkSchema.safeParse(body);
     if (!parsed.success) return apiValidationError(parsed.error);
 
-    const { studentIds, targetSectionId, targetAcademicYearId, discountPercent } = parsed.data;
+    const { studentIds, targetSectionId, targetAcademicYearId, discountPercent, termType } = parsed.data;
 
     // 1. Verify target section and class exist
     const targetSection = await prisma.section.findFirst({
@@ -41,40 +42,7 @@ export async function POST(req: NextRequest) {
     });
     if (!targetSection) return apiNotFound("Target Section");
 
-    // 2. Fetch fee structures for the target class and academic year
-    const feeStructures = await prisma.feeStructure.findMany({
-      where: {
-        classId: targetSection.classId,
-        academicYearId: targetAcademicYearId,
-      },
-      include: { feeCategory: true },
-    });
-
-    // Compute annual fee items if structures exist
-    const feeItems = feeStructures.map((fs) => {
-      const base = Number(fs.amount);
-      let annual = base;
-      switch (fs.frequency) {
-        case "MONTHLY":
-          annual = base * 12;
-          break;
-        case "QUARTERLY":
-          annual = base * 4;
-          break;
-        case "SEMI_ANNUAL":
-          annual = base * 2;
-          break;
-      }
-      return {
-        feeStructureId: fs.id,
-        name: fs.feeCategory.name,
-        amount: annual * (1 - discountPercent / 100),
-      };
-    });
-
-    const totalAmount = feeItems.reduce((acc, item) => acc + item.amount, 0);
-
-    // 3. Process promotions in a single transaction
+    // 2. Process promotions in a single transaction
     const results = await prisma.$transaction(async (tx) => {
       const promoted: string[] = [];
       const skipped: string[] = [];
@@ -109,6 +77,13 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
+        // Resolve final term type (either parameter or current student term type)
+        const currentEnrollment = await tx.studentEnrollment.findFirst({
+          where: { studentId },
+          orderBy: { enrolledAt: "desc" },
+        });
+        const finalTermType = termType || currentEnrollment?.termType || "FULL_TERM";
+
         // Create enrollment
         await tx.studentEnrollment.create({
           data: {
@@ -116,51 +91,143 @@ export async function POST(req: NextRequest) {
             academicYearId: targetAcademicYearId,
             sectionId: targetSectionId,
             rollNo: student.rollNo, // Rollover current rollNo
+            termType: finalTermType,
           },
         });
 
-        // Generate invoice if target class has fees
-        if (totalAmount > 0) {
-          let invoiceNo = "";
-          let isUnique = false;
+        // Generate invoices matching target class fees and term type templates
+        const feeStructures = await tx.feeStructure.findMany({
+          where: {
+            classId: targetSection.classId,
+            academicYearId: targetAcademicYearId,
+            termType: finalTermType,
+          },
+          include: { feeCategory: true },
+        });
 
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const candidate = await generateUniqueInvoiceNo(tx);
-            if (!generatedInvoiceNos.has(candidate)) {
-              invoiceNo = candidate;
-              generatedInvoiceNos.add(candidate);
-              isUnique = true;
-              break;
+        if (feeStructures.length > 0) {
+          const annualFees = feeStructures.map((fs) => {
+            const base = Number(fs.amount);
+            let annual = base;
+            switch (fs.frequency) {
+              case "MONTHLY": annual = base * 12; break;
+              case "QUARTERLY": annual = base * 4; break;
+              case "SEMI_ANNUAL": annual = base * 2; break;
+              default: annual = base;
             }
-          }
-
-          if (!isUnique) {
-            // Fallback to a guaranteed unique ID with a full UUID inside standard format
-            invoiceNo = `INV-PROMO-FB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-            generatedInvoiceNos.add(invoiceNo);
-          }
-
-          const dueDate = new Date();
-          dueDate.setDate(dueDate.getDate() + 30); // 30 days due date
-
-          await tx.invoice.create({
-            data: {
-              studentId,
-              number: invoiceNo,
-              year: new Date().getFullYear(),
-              totalAmount,
-              paidAmount: 0,
-              status: "PENDING",
-              dueDate,
-              items: {
-                create: feeItems.map((fi) => ({
-                  feeStructureId: fi.feeStructureId,
-                  amount: fi.amount,
-                  description: fi.name,
-                })),
-              },
-            },
+            return { feeStructureId: fs.id, name: fs.feeCategory.name, annual };
           });
+
+          const annualTotal = annualFees.reduce((acc, item) => acc + item.annual, 0);
+          const discountMultiplier = 1 - discountPercent / 100;
+
+          // Fetch templates for the resolved term type
+          const classTemplates = await tx.feeInstallmentTemplate.findMany({
+            where: {
+              classId: targetSection.classId,
+              academicYearId: targetAcademicYearId,
+              termType: finalTermType,
+            },
+            orderBy: { dueDate: "asc" },
+          });
+
+          if (classTemplates.length > 0) {
+            const totalTemplateAmount = classTemplates.reduce((sum, inst) => sum + Number(inst.amount), 0);
+
+            for (const temp of classTemplates) {
+              let invoiceNo = "";
+              let isUnique = false;
+
+              for (let attempt = 0; attempt < 5; attempt++) {
+                const candidate = await generateUniqueInvoiceNo(tx);
+                if (!generatedInvoiceNos.has(candidate)) {
+                  invoiceNo = candidate;
+                  generatedInvoiceNos.add(candidate);
+                  isUnique = true;
+                  break;
+                }
+              }
+
+              if (!isUnique) {
+                invoiceNo = `INV-PROMO-FB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+                generatedInvoiceNos.add(invoiceNo);
+              }
+
+              const tempAmount = Number(temp.amount);
+              const discountedTotal = tempAmount * discountMultiplier;
+
+              await tx.invoice.create({
+                data: {
+                  studentId,
+                  number: invoiceNo,
+                  year: new Date().getFullYear(),
+                  totalAmount: discountedTotal,
+                  paidAmount: 0,
+                  status: "PENDING",
+                  dueDate: temp.dueDate,
+                  lateFeeActive: temp.lateFeeActive,
+                  lateFeeType: temp.lateFeeType,
+                  lateFeeValue: temp.lateFeeValue,
+                  lateFeePerDay: temp.lateFeePerDay,
+                  lateFeeGrace: temp.lateFeeGrace,
+                  items: {
+                    create: annualFees.map((fi) => {
+                      const proportionalAmount = totalTemplateAmount > 0
+                        ? fi.annual * (tempAmount / totalTemplateAmount) * discountMultiplier
+                        : 0;
+                      return {
+                        feeStructureId: fi.feeStructureId,
+                        amount: proportionalAmount,
+                        description: `${fi.name} - ${temp.name}`,
+                      };
+                    }),
+                  },
+                },
+              });
+            }
+          } else {
+            // Fallback to single consolidated annual invoice
+            let invoiceNo = "";
+            let isUnique = false;
+
+            for (let attempt = 0; attempt < 5; attempt++) {
+              const candidate = await generateUniqueInvoiceNo(tx);
+              if (!generatedInvoiceNos.has(candidate)) {
+                invoiceNo = candidate;
+                generatedInvoiceNos.add(candidate);
+                isUnique = true;
+                break;
+              }
+            }
+
+            if (!isUnique) {
+              invoiceNo = `INV-PROMO-FB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+              generatedInvoiceNos.add(invoiceNo);
+            }
+
+            const discountedTotal = annualTotal * discountMultiplier;
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + 30);
+
+            await tx.invoice.create({
+              data: {
+                studentId,
+                number: invoiceNo,
+                year: new Date().getFullYear(),
+                totalAmount: discountedTotal,
+                paidAmount: 0,
+                status: "PENDING",
+                dueDate,
+                items: {
+                  create: annualFees.map((fi) => ({
+                    feeStructureId: fi.feeStructureId,
+                    amount: fi.annual * discountMultiplier,
+                    description: fi.name,
+                  })),
+                },
+              },
+            });
+          }
         }
 
         promoted.push(studentId);

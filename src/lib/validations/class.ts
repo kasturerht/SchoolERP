@@ -22,6 +22,7 @@ const inlineFeeSchema = z.object({
     .min(1, "Fee name is required")
     .max(100, "Fee name must be at most 100 characters"),
   amount: z.number().positive("Amount must be positive"),
+  termType: z.enum(["FULL_TERM", "HALF_TERM", "SHORT_TERM"]).default("FULL_TERM"),
 });
 
 const inlineInstallmentSchema = z.object({
@@ -32,7 +33,10 @@ const inlineInstallmentSchema = z.object({
     .max(100, "Installment name must be at most 100 characters"),
   amount: z.number().positive("Amount must be positive"),
   dueDate: z.string().min(1, "Due date is required"),
+  termType: z.enum(["FULL_TERM", "HALF_TERM", "SHORT_TERM"]).default("FULL_TERM"),
   lateFeeActive: z.boolean().default(false),
+  lateFeeType: z.enum(["DAILY", "LUMP_SUM", "PERCENTAGE"]).default("DAILY"),
+  lateFeeValue: z.number().nonnegative("Late fee value must be at least 0").default(0),
   lateFeePerDay: z.number().nonnegative("Late fee per day must be at least 0").default(0),
   lateFeeGrace: z.number().int().nonnegative("Grace days must be at least 0").default(0),
 });

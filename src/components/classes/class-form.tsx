@@ -49,6 +49,7 @@ interface FeeRow {
   id?: string;
   name: string;
   amount: number | string;
+  termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
 }
 
 interface InstallmentRow {
@@ -56,7 +57,10 @@ interface InstallmentRow {
   name: string;
   amount: number | string;
   dueDate: string;
+  termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
   lateFeeActive: boolean;
+  lateFeeType: "DAILY" | "LUMP_SUM" | "PERCENTAGE";
+  lateFeeValue: number | string;
   lateFeePerDay: number | string;
   lateFeeGrace: number | string;
 }
@@ -89,13 +93,17 @@ interface ClassData {
     amount: number | string;
     frequency: string;
     feeCategory: { name: string };
+    termType?: string;
   }>;
   feeInstallmentTemplates?: Array<{
     id: string;
     name: string;
     amount: number | string;
     dueDate: string | Date;
+    termType?: string;
     lateFeeActive: boolean;
+    lateFeeType?: string;
+    lateFeeValue?: number | string;
     lateFeePerDay: number | string;
     lateFeeGrace: number | string;
   }>;
@@ -122,8 +130,9 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   );
   const [branchId, setBranchId] = useState(initialData?.branchId ?? "");
   const [academicYearId, setAcademicYearId] = useState(
-    initialData?.academicYearId ?? ""
+    initialData?.academicYearId || ""
   );
+  const [activeTermTab, setActiveTermTab] = useState<"FULL_TERM" | "HALF_TERM" | "SHORT_TERM">("FULL_TERM");
 
   // Selected subject master IDs — initialized from initialData so cleanup effect
   // doesn't strip teachers on the first render
@@ -165,6 +174,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       id: f.id,
       name: f.feeCategory.name,
       amount: Number(f.amount),
+      termType: (f.termType || "FULL_TERM") as any,
     })) ?? []
   );
 
@@ -174,7 +184,10 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       name: t.name,
       amount: Number(t.amount),
       dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split("T")[0] : "",
+      termType: (t.termType || "FULL_TERM") as any,
       lateFeeActive: t.lateFeeActive,
+      lateFeeType: (t.lateFeeType || "DAILY") as any,
+      lateFeeValue: t.lateFeeValue !== undefined ? Number(t.lateFeeValue) : Number(t.lateFeePerDay),
       lateFeePerDay: Number(t.lateFeePerDay),
       lateFeeGrace: Number(t.lateFeeGrace),
     })) ?? []
@@ -377,29 +390,32 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   }
 
   // Fee helpers
-  function addFee() {
-    setFees((prev) => [...prev, { name: "", amount: "" }]);
+  function addFee(termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM" = "FULL_TERM") {
+    setFees((prev) => [...prev, { name: "", amount: "", termType }]);
   }
 
   function removeFee(index: number) {
     setFees((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function updateFee(index: number, field: keyof FeeRow, value: string) {
+  function updateFee(index: number, field: keyof FeeRow, value: any) {
     setFees((prev) =>
       prev.map((f, i) => (i === index ? { ...f, [field]: value } : f))
     );
   }
 
   // Installment helpers
-  function addInstallment() {
+  function addInstallment(termType: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM" = "FULL_TERM") {
     setInstallments((prev) => [
       ...prev,
       {
         name: "",
         amount: "",
         dueDate: "",
+        termType,
         lateFeeActive: false,
+        lateFeeType: "DAILY",
+        lateFeeValue: 0,
         lateFeePerDay: 0,
         lateFeeGrace: 0,
       },
@@ -422,6 +438,14 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     return sum + amt;
   }, 0);
 
+  const fullTermInstallmentsTotal = installments
+    .filter((inst) => inst.termType === "FULL_TERM")
+    .reduce((sum, inst) => {
+      const amt = typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount;
+      if (isNaN(amt) || amt <= 0) return sum;
+      return sum + amt;
+    }, 0);
+
   const annualTotal = fees.reduce((sum, f) => {
     const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
     if (isNaN(amt) || amt <= 0) return sum;
@@ -432,22 +456,31 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     e.preventDefault();
     setErrors({});
 
-    const totalFeesAmount = fees.reduce((sum, f) => {
-      const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
-      return sum + (isNaN(amt) ? 0 : amt);
-    }, 0);
+    const termTypesList = ["FULL_TERM", "HALF_TERM", "SHORT_TERM"] as const;
+    for (const t of termTypesList) {
+      const termFees = fees.filter(f => f.termType === t);
+      const termInstallments = installments.filter(inst => inst.termType === t);
 
-    const totalInstallmentsAmount = installments.reduce((sum, inst) => {
-      const amt = typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount;
-      return sum + (isNaN(amt) ? 0 : amt);
-    }, 0);
+      if (termFees.length > 0 || termInstallments.length > 0) {
+        const totalTermFees = termFees.reduce((sum, f) => {
+          const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
+          return sum + (isNaN(amt) ? 0 : amt);
+        }, 0);
 
-    if (installments.length > 0 && Math.abs(totalFeesAmount - totalInstallmentsAmount) > 0.01) {
-      snackbar.show(
-        `The sum of installments (₹${totalInstallmentsAmount.toLocaleString("en-IN")}) must equal the total fee amount (₹${totalFeesAmount.toLocaleString("en-IN")}).`,
-        "error"
-      );
-      return;
+        const totalTermInstallments = termInstallments.reduce((sum, inst) => {
+          const amt = typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount;
+          return sum + (isNaN(amt) ? 0 : amt);
+        }, 0);
+
+        if (Math.abs(totalTermFees - totalTermInstallments) > 0.01) {
+          const termLabel = t === "FULL_TERM" ? "Full Term" : t === "HALF_TERM" ? "Half Term" : "Short Term";
+          snackbar.show(
+            `The sum of ${termLabel} installments (₹${totalTermInstallments.toLocaleString("en-IN")}) must equal the total ${termLabel} fee amount (₹${totalTermFees.toLocaleString("en-IN")}).`,
+            "error"
+          );
+          return;
+        }
+      }
     }
 
     const formattedInstallments = installments.map((inst) => ({
@@ -455,7 +488,10 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       name: inst.name,
       amount: typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount,
       dueDate: inst.dueDate,
+      termType: inst.termType,
       lateFeeActive: inst.lateFeeActive,
+      lateFeeType: inst.lateFeeType,
+      lateFeeValue: typeof inst.lateFeeValue === "string" ? parseFloat(inst.lateFeeValue) : (inst.lateFeeValue ?? 0),
       lateFeePerDay: typeof inst.lateFeePerDay === "string" ? parseFloat(inst.lateFeePerDay) : inst.lateFeePerDay,
       lateFeeGrace: typeof inst.lateFeeGrace === "string" ? parseInt(inst.lateFeeGrace, 10) : inst.lateFeeGrace,
     }));
@@ -478,6 +514,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           name: f.name,
           amount:
             typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
+          termType: f.termType,
         })),
         installments: formattedInstallments,
       };
@@ -485,11 +522,25 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       const result = createClassSchema.safeParse(formFields);
       if (!result.success) {
         const fieldErrors: Record<string, string> = {};
+        let hasInstallmentError = false;
+        let hasFeeError = false;
+        let hasDivisionError = false;
         for (const err of result.error.errors) {
           const key = err.path.join(".");
           if (!fieldErrors[key]) fieldErrors[key] = err.message;
+          if (key.startsWith("installments")) hasInstallmentError = true;
+          if (key.startsWith("fees")) hasFeeError = true;
+          if (key.startsWith("sections")) hasDivisionError = true;
         }
         setErrors(fieldErrors);
+        
+        if (hasInstallmentError || hasFeeError) {
+          snackbar.show("Please check validation errors in the Fees & Installments tab.", "error");
+        } else if (hasDivisionError) {
+          snackbar.show("Please check validation errors in the Divisions tab.", "error");
+        } else {
+          snackbar.show("Validation failed. Please correct the errors on the form.", "error");
+        }
         return;
       }
 
@@ -539,6 +590,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           name: f.name,
           amount:
             typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
+          termType: f.termType,
         })),
         installments: formattedInstallments,
       };
@@ -546,11 +598,25 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       const result = updateClassSchema.safeParse(formFields);
       if (!result.success) {
         const fieldErrors: Record<string, string> = {};
+        let hasInstallmentError = false;
+        let hasFeeError = false;
+        let hasDivisionError = false;
         for (const err of result.error.errors) {
           const key = err.path.join(".");
           if (!fieldErrors[key]) fieldErrors[key] = err.message;
+          if (key.startsWith("installments")) hasInstallmentError = true;
+          if (key.startsWith("fees")) hasFeeError = true;
+          if (key.startsWith("sections")) hasDivisionError = true;
         }
         setErrors(fieldErrors);
+
+        if (hasInstallmentError || hasFeeError) {
+          snackbar.show("Please check validation errors in the Fees & Installments tab.", "error");
+        } else if (hasDivisionError) {
+          snackbar.show("Please check validation errors in the Divisions tab.", "error");
+        } else {
+          snackbar.show("Validation failed. Please correct the errors on the form.", "error");
+        }
         return;
       }
 
@@ -663,7 +729,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="divisions">Divisions</TabsTrigger>
-              <TabsTrigger value="installments">Installment Plan</TabsTrigger>
+              <TabsTrigger value="fees-and-installments">Fees & Installments</TabsTrigger>
             </TabsList>
 
             {/* ── Details Tab ── */}
@@ -793,79 +859,6 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   }
                   fullWidth
                 />
-              </div>
-
-              <Divider />
-
-              {/* Fee Structure */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-label-lg font-medium text-on-surface">
-                    Fee Structure
-                  </p>
-                  <Button
-                    type="button"
-                    variant="text"
-                    icon="add"
-                    onClick={addFee}
-                  >
-                    Add Fee
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  {fees.map((fee, index) => (
-                    <div key={index} className="flex items-start gap-2">
-                      <div className="flex-1">
-                        <TextField
-                          label=""
-                          placeholder="Fee name (e.g. Tuition)"
-                          value={fee.name}
-                          onChange={(e) =>
-                            updateFee(index, "name", e.target.value)
-                          }
-                          error={errors[`fees.${index}.name`]}
-                          fullWidth
-                        />
-                      </div>
-                      <div className="w-40">
-                        <TextField
-                          label=""
-                          type="number"
-                          placeholder="Amount (Annual)"
-                          value={fee.amount.toString()}
-                          onChange={(e) =>
-                            updateFee(index, "amount", e.target.value)
-                          }
-                          error={errors[`fees.${index}.amount`]}
-                          fullWidth
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFee(index)}
-                        className="rounded-full p-2 hover:bg-surface-container-high text-on-surface-variant mt-1"
-                      >
-                        <Icon name="close" size={20} />
-                      </button>
-                    </div>
-                  ))}
-                  {fees.length === 0 && (
-                    <p className="text-body-sm text-on-surface-variant">
-                      No fees added. Click &ldquo;Add Fee&rdquo; to define the
-                      fee structure.
-                    </p>
-                  )}
-                </div>
-                {fees.length > 0 && (
-                  <div className="mt-4 text-right">
-                    <p className="text-label-lg text-on-surface">
-                      Total:{" "}
-                      <span className="font-semibold">
-                        ₹{annualTotal.toLocaleString("en-IN")}
-                      </span>
-                    </p>
-                  </div>
-                )}
               </div>
             </TabsContent>
 
@@ -1011,176 +1004,353 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
               </div>
             </TabsContent>
 
-            {/* ── Installments Tab ── */}
-            <TabsContent value="installments" className="mt-5 space-y-5">
+            {/* ── Fees & Installments Tab ── */}
+            <TabsContent value="fees-and-installments" className="mt-5 space-y-6">
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-label-lg font-medium text-on-surface">
-                      Installment Plan & Late Fee Rules
-                    </p>
-                    <p className="text-body-sm text-on-surface-variant mt-0.5">
-                      Configure standard due dates and late fees for parent payments.
-                    </p>
+                <p className="text-label-lg font-medium text-on-surface">
+                  Fees & Installment Plans
+                </p>
+                <p className="text-body-sm text-on-surface-variant mt-0.5">
+                  Configure the annual fee structure and payment installments for each term plan.
+                </p>
+              </div>
+
+              {/* Nested Sub-Tabs for Term Selection */}
+              <div className="flex border-b border-outline-variant/60">
+                {[
+                  { value: "FULL_TERM", label: "Full Term" },
+                  { value: "HALF_TERM", label: "Half Term" },
+                  { value: "SHORT_TERM", label: "Short Term" },
+                ].map((tab) => {
+                  const isActive = activeTermTab === tab.value;
+                  const termFees = fees.filter(f => f.termType === tab.value);
+                  const hasFees = termFees.length > 0;
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => setActiveTermTab(tab.value as any)}
+                      className={`px-5 py-3 text-label-md font-bold transition-all relative -mb-[2px] cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? "text-primary border-b-2 border-primary font-black"
+                          : "text-on-surface-variant border-b-2 border-transparent hover:text-on-surface"
+                      }`}
+                    >
+                      {tab.label}
+                      {hasFees && (
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Sub-Tab Content based on activeTermTab */}
+              <div className="space-y-6">
+                
+                {/* A. FEE STRUCTURE SECTION */}
+                <div className="bg-slate-50/10 border border-outline-variant/40 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-label-lg font-bold text-on-surface">
+                        Fee Structure
+                      </h4>
+                      <p className="text-body-xs text-on-surface-variant">
+                        Define categories and annual fees for this term.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="text"
+                      icon="add"
+                      onClick={() => addFee(activeTermTab)}
+                    >
+                      Add Fee Row
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="text"
-                    icon="add"
-                    onClick={addInstallment}
-                  >
-                    Add Installment
-                  </Button>
+
+                  <div className="space-y-3">
+                    {fees
+                      .map((fee, index) => ({ fee, index }))
+                      .filter(({ fee }) => fee.termType === activeTermTab)
+                      .map(({ fee, index }) => (
+                        <div key={index} className="flex items-start gap-2 animate-fadeIn">
+                          <div className="flex-1">
+                            <TextField
+                              label=""
+                              placeholder="Fee name (e.g. Tuition)"
+                              value={fee.name}
+                              onChange={(e) =>
+                                updateFee(index, "name", e.target.value)
+                              }
+                              error={errors[`fees.${index}.name`]}
+                              fullWidth
+                            />
+                          </div>
+                          <div className="w-40">
+                            <TextField
+                              label=""
+                              type="number"
+                              placeholder="Amount (₹)"
+                              value={fee.amount.toString()}
+                              onChange={(e) =>
+                                updateFee(index, "amount", e.target.value)
+                              }
+                              error={errors[`fees.${index}.amount`]}
+                              fullWidth
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFee(index)}
+                            className="rounded-full p-2 hover:bg-rose-50 text-rose-500 hover:text-rose-700 mt-1 cursor-pointer transition-colors"
+                          >
+                            <Icon name="close" size={20} />
+                          </button>
+                        </div>
+                      ))}
+
+                    {fees.filter(f => f.termType === activeTermTab).length === 0 && (
+                      <p className="text-body-sm text-on-surface-variant text-center py-4 bg-slate-50/30 rounded-xl border border-dashed border-outline-variant/30">
+                        No fees added for this term yet. Click &ldquo;Add Fee Row&rdquo; to begin.
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  {installments.map((inst, index) => (
-                    <div
-                      key={index}
-                      className="rounded-md border border-outline-variant p-4 space-y-4 bg-slate-50/35"
+                {/* B. INSTALLMENTS SECTION */}
+                <div className="bg-slate-50/10 border border-outline-variant/40 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-label-lg font-bold text-on-surface">
+                        Installment Plan
+                      </h4>
+                      <p className="text-body-xs text-on-surface-variant">
+                        Divide the total fee of this term into installments.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="text"
+                      icon="add"
+                      onClick={() => addInstallment(activeTermTab)}
                     >
-                      <div className="flex justify-between items-center">
-                        <p className="text-label-md font-bold text-on-surface">
-                          Installment #{index + 1}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => removeInstallment(index)}
-                          className="rounded-full p-2 hover:bg-surface-container-high text-on-surface-variant"
+                      Add Installment
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {installments
+                      .map((inst, index) => ({ inst, index }))
+                      .filter(({ inst }) => inst.termType === activeTermTab)
+                      .map(({ inst, index }, mappedIdx) => (
+                        <div
+                          key={index}
+                          className="rounded-xl border border-outline-variant/50 p-4 space-y-4 bg-slate-50/35 relative animate-fadeIn"
                         >
-                          <Icon name="close" size={20} />
-                        </button>
-                      </div>
+                          <div className="flex justify-between items-center">
+                            <p className="text-label-sm font-bold text-primary">
+                              Installment #{mappedIdx + 1}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => removeInstallment(index)}
+                              className="rounded-full p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 cursor-pointer transition-colors"
+                            >
+                              <Icon name="close" size={18} />
+                            </button>
+                          </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <TextField
-                          label="Installment Name"
-                          placeholder="e.g. Admission / Term 1"
-                          value={inst.name}
-                          onChange={(e) =>
-                            updateInstallment(index, "name", e.target.value)
-                          }
-                          error={errors[`installments.${index}.name`]}
-                          required
-                          fullWidth
-                        />
-                        <TextField
-                          label="Amount (₹)"
-                          type="number"
-                          placeholder="e.g. 15000"
-                          value={inst.amount.toString()}
-                          onChange={(e) =>
-                            updateInstallment(index, "amount", e.target.value)
-                          }
-                          error={errors[`installments.${index}.amount`]}
-                          required
-                          fullWidth
-                        />
-                        <TextField
-                          label="Due Date"
-                          type="date"
-                          value={inst.dueDate}
-                          onChange={(e) =>
-                            updateInstallment(index, "dueDate", e.target.value)
-                          }
-                          error={errors[`installments.${index}.dueDate`]}
-                          required
-                          fullWidth
-                        />
-                      </div>
-
-                      {/* Late fee subform */}
-                      <div className="pt-2 border-t border-dashed border-outline-variant/50 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`late-fee-active-${index}`}
-                            checked={inst.lateFeeActive}
-                            onChange={(e) =>
-                              updateInstallment(index, "lateFeeActive", e.target.checked)
-                            }
-                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40"
-                          />
-                          <label
-                            htmlFor={`late-fee-active-${index}`}
-                            className="text-label-md font-medium text-on-surface cursor-pointer select-none"
-                          >
-                            Apply Late Fees
-                          </label>
-                        </div>
-
-                        {inst.lateFeeActive && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <TextField
-                              label="Penalty Rate (₹ per day)"
-                              type="number"
-                              placeholder="e.g. 50"
-                              value={inst.lateFeePerDay.toString()}
+                              label="Installment Name"
+                              placeholder="e.g. Admission / Term 1"
+                              value={inst.name}
                               onChange={(e) =>
-                                updateInstallment(index, "lateFeePerDay", e.target.value)
+                                updateInstallment(index, "name", e.target.value)
                               }
-                              error={errors[`installments.${index}.lateFeePerDay`]}
+                              error={errors[`installments.${index}.name`]}
                               required
                               fullWidth
                             />
                             <TextField
-                              label="Grace Days (before penalty starts)"
+                              label="Amount (₹)"
                               type="number"
-                              placeholder="e.g. 2"
-                              value={inst.lateFeeGrace.toString()}
+                              placeholder="e.g. 15000"
+                              value={inst.amount.toString()}
                               onChange={(e) =>
-                                updateInstallment(index, "lateFeeGrace", e.target.value)
+                                updateInstallment(index, "amount", e.target.value)
                               }
-                              error={errors[`installments.${index}.lateFeeGrace`]}
+                              error={errors[`installments.${index}.amount`]}
+                              required
+                              fullWidth
+                            />
+                            <TextField
+                              label="Due Date"
+                              type="date"
+                              value={inst.dueDate}
+                              onChange={(e) =>
+                                updateInstallment(index, "dueDate", e.target.value)
+                              }
+                              error={errors[`installments.${index}.dueDate`]}
                               required
                               fullWidth
                             />
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
 
-                  {installments.length === 0 && (
-                    <div className="p-8 text-center border border-dashed rounded-xl bg-slate-50/50">
-                      <p className="text-body-md text-on-surface-variant font-medium">
-                        No installments configured
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Click &ldquo;Add Installment&rdquo; to define a payment schedule.
-                      </p>
-                    </div>
-                  )}
+                          {/* Late fee subform */}
+                          <div className="pt-2 border-t border-dashed border-outline-variant/40 space-y-3">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`late-fee-active-${index}`}
+                                checked={inst.lateFeeActive}
+                                onChange={(e) =>
+                                  updateInstallment(index, "lateFeeActive", e.target.checked)
+                                }
+                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40"
+                              />
+                              <label
+                                htmlFor={`late-fee-active-${index}`}
+                                className="text-label-md font-medium text-on-surface cursor-pointer select-none"
+                              >
+                                Apply Late Fees
+                              </label>
+                            </div>
+
+                            {inst.lateFeeActive && (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-label-md text-on-surface-variant px-1">
+                                    Late Fee Type *
+                                  </label>
+                                  <Select
+                                    value={inst.lateFeeType || "DAILY"}
+                                    onValueChange={(val) => {
+                                      updateInstallment(index, "lateFeeType", val);
+                                      if (val === "DAILY") {
+                                        updateInstallment(index, "lateFeePerDay", inst.lateFeeValue || 0);
+                                      } else {
+                                        updateInstallment(index, "lateFeePerDay", 0);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger fullWidth>
+                                      <SelectValue placeholder="Select Type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="DAILY">Daily Rate</SelectItem>
+                                      <SelectItem value="LUMP_SUM">One-time Lump-sum</SelectItem>
+                                      <SelectItem value="PERCENTAGE">Percentage of Installment</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <TextField
+                                  label={
+                                    inst.lateFeeType === "LUMP_SUM"
+                                      ? "Fixed Penalty (₹ lump-sum)"
+                                      : inst.lateFeeType === "PERCENTAGE"
+                                        ? "Penalty Rate (% of installment)"
+                                        : "Penalty Rate (₹ per day)"
+                                  }
+                                  type="number"
+                                  placeholder={
+                                    inst.lateFeeType === "PERCENTAGE" ? "e.g. 5" : "e.g. 50"
+                                  }
+                                  value={(inst.lateFeeValue ?? 0).toString()}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    updateInstallment(index, "lateFeeValue", val);
+                                    if ((inst.lateFeeType || "DAILY") === "DAILY") {
+                                      updateInstallment(index, "lateFeePerDay", val);
+                                    }
+                                  }}
+                                  error={errors[`installments.${index}.lateFeeValue`]}
+                                  required
+                                  fullWidth
+                                />
+
+                                <TextField
+                                  label="Grace Days (before penalty starts)"
+                                  type="number"
+                                  placeholder="e.g. 2"
+                                  value={inst.lateFeeGrace.toString()}
+                                  onChange={(e) =>
+                                    updateInstallment(index, "lateFeeGrace", e.target.value)
+                                  }
+                                  error={errors[`installments.${index}.lateFeeGrace`]}
+                                  required
+                                  fullWidth
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                    {installments.filter(i => i.termType === activeTermTab).length === 0 && (
+                      <div className="p-8 text-center border border-dashed rounded-xl bg-slate-50/20 border-outline-variant/30">
+                        <p className="text-body-md text-on-surface-variant font-medium">
+                          No installments configured
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Click &ldquo;Add Installment&rdquo; to define a payment schedule.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {installmentsTotal > 0 && (
-                  <div className="mt-4 pt-4 border-t flex justify-between items-center text-label-lg text-on-surface">
-                    <div>
-                      <span>Total Fees Configured: </span>
-                      <strong className="font-semibold text-primary">
-                        ₹{annualTotal.toLocaleString("en-IN")}
-                      </strong>
+                {/* C. TERM TOTAL SUMMARY AND VERIFICATION CARD */}
+                {(() => {
+                  const termFees = fees.filter(f => f.termType === activeTermTab);
+                  const termInstallments = installments.filter(i => i.termType === activeTermTab);
+
+                  const totalFees = termFees.reduce((sum, f) => {
+                    const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
+                    return sum + (isNaN(amt) ? 0 : amt);
+                  }, 0);
+
+                  const totalInstallments = termInstallments.reduce((sum, i) => {
+                    const amt = typeof i.amount === "string" ? parseFloat(i.amount) : i.amount;
+                    return sum + (isNaN(amt) ? 0 : amt);
+                  }, 0);
+
+                  const isMismatch = Math.abs(totalFees - totalInstallments) > 0.01;
+                  const termLabel = activeTermTab === "FULL_TERM" ? "Full Term" : activeTermTab === "HALF_TERM" ? "Half Term" : "Short Term";
+
+                  if (totalFees === 0 && totalInstallments === 0) return null;
+
+                  return (
+                    <div className={`p-4 rounded-2xl border text-sm transition-colors ${
+                      isMismatch
+                        ? "bg-rose-50 border-rose-200 text-rose-800"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    }`}>
+                      <div className="flex items-start gap-2.5">
+                        <div className="mt-0.5">
+                          <Icon name={isMismatch ? "warning" : "check_circle"} size={20} />
+                        </div>
+                        <div className="space-y-1">
+                          <strong className="font-bold block text-sm">
+                            {termLabel} Fee Summary
+                          </strong>
+                          <div className="text-xs space-y-0.5 font-medium opacity-90">
+                            <div>Total Fees: ₹{totalFees.toLocaleString("en-IN")}</div>
+                            <div>Total Installments Sum: ₹{totalInstallments.toLocaleString("en-IN")}</div>
+                          </div>
+                          {isMismatch && (
+                            <p className="text-xs font-semibold mt-1.5 text-rose-700">
+                              ⚠️ The sum of installments must equal the total fee amount (Difference: ₹{Math.abs(totalFees - totalInstallments).toLocaleString("en-IN")}).
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span>Installments Sum: </span>
-                      <strong
-                        className={`font-semibold ${
-                          Math.abs(annualTotal - installmentsTotal) > 0.01
-                            ? "text-error"
-                            : "text-success"
-                        }`}
-                      >
-                        ₹{installmentsTotal.toLocaleString("en-IN")}
-                      </strong>
-                      {Math.abs(annualTotal - installmentsTotal) > 0.01 && (
-                        <p className="text-[10px] text-error mt-0.5 font-normal">
-                          Mismatch: Difference of ₹
-                          {Math.abs(annualTotal - installmentsTotal).toLocaleString("en-IN")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
+
               </div>
             </TabsContent>
           </Tabs>

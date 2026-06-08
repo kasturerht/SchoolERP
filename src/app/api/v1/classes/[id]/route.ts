@@ -116,24 +116,34 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const { name, numericGrade, subjects, sections, fees, installments } = parsed.data;
 
-    // Enforce sum match for installments if provided or updated
+    // Enforce sum match for each term type individually if provided or updated
     if (fees !== undefined || installments !== undefined) {
       const finalFees = fees !== undefined ? fees : existing.feeStructures.map(f => ({
         name: f.feeCategory.name,
-        amount: Number(f.amount)
+        amount: Number(f.amount),
+        termType: f.termType,
       }));
       
       const finalInstallments = installments !== undefined ? installments : existing.feeInstallmentTemplates;
 
-      const totalFeesAmount = finalFees.reduce((sum, f) => sum + Number(f.amount), 0);
-      const totalInstallmentsAmount = finalInstallments.reduce((sum, inst) => sum + Number(inst.amount), 0);
-
-      if (finalInstallments.length > 0 && Math.abs(totalFeesAmount - totalInstallmentsAmount) > 0.01) {
-        return apiError(
-          "BAD_REQUEST",
-          `The sum of installments (₹${totalInstallmentsAmount.toLocaleString("en-IN")}) must equal the total fee amount (₹${totalFeesAmount.toLocaleString("en-IN")}).`,
-          400
-        );
+      const termTypes = ["FULL_TERM", "HALF_TERM", "SHORT_TERM"] as const;
+      for (const t of termTypes) {
+        const termFees = finalFees.filter(f => f.termType === t);
+        const termInstallments = finalInstallments.filter(i => i.termType === t);
+        
+        if (termFees.length > 0 || termInstallments.length > 0) {
+          const totalTermFees = termFees.reduce((sum, f) => sum + Number(f.amount), 0);
+          const totalTermInstallments = termInstallments.reduce((sum, i) => sum + Number(i.amount), 0);
+          
+          if (Math.abs(totalTermFees - totalTermInstallments) > 0.01) {
+            const termLabel = t === "FULL_TERM" ? "Full Term" : t === "HALF_TERM" ? "Half Term" : "Short Term";
+            return apiError(
+              "BAD_REQUEST",
+              `The sum of ${termLabel} installments (₹${totalTermInstallments.toLocaleString("en-IN")}) must equal the total ${termLabel} fee amount (₹${totalTermFees.toLocaleString("en-IN")}).`,
+              400
+            );
+          }
+        }
       }
     }
 
@@ -387,6 +397,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 feeCategoryId: feeCategory.id,
                 amount: fee.amount,
                 frequency: "ANNUAL",
+                termType: fee.termType,
               },
             });
           } else {
@@ -397,6 +408,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
                 feeCategoryId: feeCategory.id,
                 amount: fee.amount,
                 frequency: "ANNUAL",
+                termType: fee.termType,
               },
             });
           }
@@ -419,7 +431,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
               name: inst.name,
               amount: inst.amount,
               dueDate: new Date(inst.dueDate),
+              termType: inst.termType,
               lateFeeActive: inst.lateFeeActive,
+              lateFeeType: inst.lateFeeType,
+              lateFeeValue: inst.lateFeeValue,
               lateFeePerDay: inst.lateFeePerDay,
               lateFeeGrace: inst.lateFeeGrace,
             },

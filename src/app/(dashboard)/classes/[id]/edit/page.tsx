@@ -41,7 +41,10 @@ interface ClassData {
     name: string;
     amount: number | string;
     dueDate: string | Date;
+    termType?: string;
     lateFeeActive: boolean;
+    lateFeeType?: string;
+    lateFeeValue?: number | string;
     lateFeePerDay: number | string;
     lateFeeGrace: number | string;
   }>;

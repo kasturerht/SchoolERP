@@ -166,16 +166,25 @@ export async function POST(req: NextRequest) {
   const { name, numericGrade, branchId, academicYearId, sections, fees, installments, subjectMasterIds } =
     parsed.data;
 
-  // Enforce sum match for installments if provided
-  const totalFeesAmount = fees.reduce((sum, f) => sum + f.amount, 0);
-  const totalInstallmentsAmount = installments.reduce((sum, inst) => sum + inst.amount, 0);
-
-  if (installments.length > 0 && Math.abs(totalFeesAmount - totalInstallmentsAmount) > 0.01) {
-    return apiError(
-      "BAD_REQUEST",
-      `The sum of installments (₹${totalInstallmentsAmount.toLocaleString("en-IN")}) must equal the total fee amount (₹${totalFeesAmount.toLocaleString("en-IN")}).`,
-      400
-    );
+  // Enforce sum match for each term type (FULL_TERM, HALF_TERM, SHORT_TERM) individually
+  const termTypes = ["FULL_TERM", "HALF_TERM", "SHORT_TERM"] as const;
+  for (const t of termTypes) {
+    const termFees = fees.filter(f => f.termType === t);
+    const termInstallments = installments.filter(i => i.termType === t);
+    
+    if (termFees.length > 0 || termInstallments.length > 0) {
+      const totalTermFees = termFees.reduce((sum, f) => sum + f.amount, 0);
+      const totalTermInstallments = termInstallments.reduce((sum, i) => sum + i.amount, 0);
+      
+      if (Math.abs(totalTermFees - totalTermInstallments) > 0.01) {
+        const termLabel = t === "FULL_TERM" ? "Full Term" : t === "HALF_TERM" ? "Half Term" : "Short Term";
+        return apiError(
+          "BAD_REQUEST",
+          `The sum of ${termLabel} installments (₹${totalTermInstallments.toLocaleString("en-IN")}) must equal the total ${termLabel} fee amount (₹${totalTermFees.toLocaleString("en-IN")}).`,
+          400
+        );
+      }
+    }
   }
 
   // Restrict branch-scoped roles from creating classes in another branch
@@ -324,6 +333,7 @@ export async function POST(req: NextRequest) {
             feeCategoryId: feeCategory.id,
             amount: fee.amount,
             frequency: "ANNUAL",
+            termType: fee.termType,
           },
         });
       }
@@ -337,7 +347,10 @@ export async function POST(req: NextRequest) {
             name: inst.name,
             amount: inst.amount,
             dueDate: new Date(inst.dueDate),
+            termType: inst.termType,
             lateFeeActive: inst.lateFeeActive,
+            lateFeeType: inst.lateFeeType,
+            lateFeeValue: inst.lateFeeValue,
             lateFeePerDay: inst.lateFeePerDay,
             lateFeeGrace: inst.lateFeeGrace,
           },

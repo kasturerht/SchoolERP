@@ -277,7 +277,7 @@ async function globalSetup(config: FullConfig) {
         dateOfBirth: new Date("2015-06-01"),
         gender: gender as any,
         category: category as any,
-        status: "ACTIVE",
+        status: "ACTIVE" as any,
       });
     }
 
@@ -293,7 +293,7 @@ async function globalSetup(config: FullConfig) {
                 sectionId: studentSection.id,
               },
             },
-          },
+          } as any,
         })
       )
     );

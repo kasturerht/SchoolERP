@@ -62,6 +62,7 @@ export default function BulkPromotionPage() {
   const [targetSections, setTargetSections] = useState<SectionRecord[]>([]);
 
   const [discountPercent, setDiscountPercent] = useState(0);
+  const [termType, setTermType] = useState<string>(""); // Empty string means Inherit Current
 
   // Students registry state
   const [students, setStudents] = useState<StudentInList[]>([]);
@@ -226,6 +227,7 @@ export default function BulkPromotionPage() {
           targetSectionId,
           targetAcademicYearId,
           discountPercent,
+          ...(termType ? { termType } : {}),
         }),
       });
       const data = await res.json();
@@ -574,24 +576,43 @@ export default function BulkPromotionPage() {
 
                 {/* Auto Invoice generation configurations */}
                 <div className="space-y-4 pt-2">
-                  <div className="font-bold text-xs uppercase tracking-wider text-slate-500 pl-0.5">Next-Year Billing Concession</div>
+                  <div className="font-bold text-xs uppercase tracking-wider text-slate-500 pl-0.5 font-sans">Next-Year Billing Configurations</div>
                   
-                  <div className="space-y-1.5 max-w-xs">
-                    <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Fee Concession on All Promoted Students (%)</label>
-                    <div className="relative flex items-center">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={discountPercent}
-                        onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                        className="w-full h-[40px] rounded-xl border border-outline px-3 pr-8 text-body-md outline-none focus:border-primary bg-white transition-colors font-mono"
-                      />
-                      <span className="absolute right-3.5 font-bold text-slate-400 text-sm">%</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Fee Concession on All Promoted Students (%)</label>
+                      <div className="relative flex items-center">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={discountPercent}
+                          onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                          className="w-full h-[40px] rounded-xl border border-outline px-3 pr-8 text-body-md outline-none focus:border-primary bg-white transition-colors font-mono"
+                        />
+                        <span className="absolute right-3.5 font-bold text-slate-400 text-sm">%</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal pl-0.5">
+                        This concession will be applied to the auto-generated bills of students when they are admitted in the new academic year.
+                      </p>
                     </div>
-                    <p className="text-[10px] text-slate-400 leading-normal pl-0.5">
-                      This concession will be applied to the auto-generated bills of students when they are admitted in the new academic year.
-                    </p>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Target Term Type</label>
+                      <select
+                        value={termType}
+                        onChange={(e) => setTermType(e.target.value)}
+                        className="w-full h-[40px] rounded-xl border border-outline px-3 text-body-md outline-none focus:border-primary bg-white transition-colors"
+                      >
+                        <option value="">Inherit Current (Recommended)</option>
+                        <option value="FULL_TERM">Full Term</option>
+                        <option value="HALF_TERM">Half Term</option>
+                        <option value="SHORT_TERM">Short Term</option>
+                      </select>
+                      <p className="text-[10px] text-slate-400 leading-normal pl-0.5">
+                        Choose whether to inherit each student's current term type, or override it to a specific term type for the new academic year.
+                      </p>
+                    </div>
                   </div>
                 </div>
 

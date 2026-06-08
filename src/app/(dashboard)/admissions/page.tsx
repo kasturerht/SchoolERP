@@ -257,6 +257,7 @@ export default function AdmissionsPage() {
     amountPaid: 0,
     paymentMethod: "CASH" as "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI",
     transactionId: "",
+    termType: "FULL_TERM" as "FULL_TERM" | "HALF_TERM" | "SHORT_TERM",
   });
 
   // Persistent Filters State Engine
@@ -348,6 +349,31 @@ export default function AdmissionsPage() {
       }
     }
   }, [permissionsLoading, hasAppAccess, hasInqAccess, activeTab]);
+
+  // Load templates dynamically when selectedApp or termType changes
+  useEffect(() => {
+    if (workspaceOpen && selectedApp && selectedApp.class?.id) {
+      const fetchTemplates = async () => {
+        try {
+          const res = await fetch(`/api/v1/fee-installment-templates?classId=${selectedApp.class?.id || ""}&academicYearId=${selectedApp.academicYear?.id || ""}&termType=${promoteForm.termType}`);
+          const data = await res.json();
+          if (data.success) {
+            setInstallmentTemplates(data.data);
+            setCustomInstallments(
+              data.data.map((t: any) => ({
+                templateId: t.id,
+                amount: Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100),
+                checked: true,
+              }))
+            );
+          }
+        } catch {
+          console.error("Failed to load installment templates.");
+        }
+      };
+      fetchTemplates();
+    }
+  }, [workspaceOpen, selectedApp?.class?.id, promoteForm.termType]);
 
   // 1. Fetch initial branches and academic years
   useEffect(() => {
@@ -859,11 +885,12 @@ export default function AdmissionsPage() {
       amountPaid: 0,
       paymentMethod: "CASH",
       transactionId: "",
+      termType: "FULL_TERM",
     });
 
     setWorkspaceOpen(true);
 
-    // If at Shortlist stage, load sections and installment templates for class
+    // If at Shortlist stage, load sections for class
     if (app.status === "SHORTLISTED" && app.class?.id) {
       try {
         const res = await fetch(`/api/v1/classes/${app.class.id}/sections`);
@@ -874,23 +901,6 @@ export default function AdmissionsPage() {
         }
       } catch {
         console.error("Failed to load sections.");
-      }
-
-      try {
-        const res = await fetch(`/api/v1/fee-installment-templates?classId=${app.class.id}&academicYearId=${app.academicYear?.id || ""}`);
-        const data = await res.json();
-        if (data.success) {
-          setInstallmentTemplates(data.data);
-          setCustomInstallments(
-            data.data.map((t: any) => ({
-              templateId: t.id,
-              amount: Number(t.amount),
-              checked: true,
-            }))
-          );
-        }
-      } catch {
-        console.error("Failed to load installment templates.");
       }
     }
   };
@@ -1073,6 +1083,7 @@ export default function AdmissionsPage() {
         paymentMethod: promoteForm.paymentMethod,
         transactionId: promoteForm.transactionId || undefined,
         installments: activeInstallments.length > 0 ? activeInstallments : undefined,
+        termType: promoteForm.termType,
       };
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/promote`, {
         method: "POST",
@@ -2314,13 +2325,25 @@ export default function AdmissionsPage() {
                               />
                             </div>
 
-                            <TextField
-                              label="Admission Date"
-                              type="date"
-                              value={promoteForm.admissionDate}
-                              onChange={(e) => setPromoteForm({ ...promoteForm, admissionDate: e.target.value })}
-                              required
-                            />
+                            <div className="grid grid-cols-2 gap-4">
+                              <TextField
+                                label="Admission Date"
+                                type="date"
+                                value={promoteForm.admissionDate}
+                                onChange={(e) => setPromoteForm({ ...promoteForm, admissionDate: e.target.value })}
+                                required
+                              />
+                                <OutlinedSelect
+                                  label="Term Type"
+                                  value={promoteForm.termType}
+                                  onValueChange={(val: any) => setPromoteForm({ ...promoteForm, termType: val })}
+                                  required
+                                >
+                                  <SelectItem value="FULL_TERM">Full Term</SelectItem>
+                                  <SelectItem value="HALF_TERM">Half Term</SelectItem>
+                                  <SelectItem value="SHORT_TERM">Short Term</SelectItem>
+                                </OutlinedSelect>
+                            </div>
 
                             <h4 className="font-bold border-b pb-1 text-primary text-xs pt-2">Invoice Fee details</h4>
                             <div className="grid grid-cols-2 gap-4">

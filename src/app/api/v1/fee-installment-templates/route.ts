@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const classId = url.searchParams.get("classId");
   const academicYearId = url.searchParams.get("academicYearId");
+  const termType = url.searchParams.get("termType") || "FULL_TERM";
 
   if (!classId || !academicYearId) {
     return apiError("BAD_REQUEST", "Missing classId or academicYearId", 400);
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
       where: {
         classId,
         academicYearId,
+        termType: termType as any,
       },
       orderBy: { dueDate: "asc" },
     });

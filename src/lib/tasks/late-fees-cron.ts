@@ -33,8 +33,19 @@ export async function runLateFeesCalculation(currentDate: Date = new Date()) {
       const daysOverdue = diffDays - graceDays;
 
       if (daysOverdue > 0) {
-        const perDayRate = Number(inv.lateFeePerDay);
-        const accumulatedPenalty = daysOverdue * perDayRate;
+        let accumulatedPenalty = 0;
+        const value = Number(inv.lateFeeValue);
+
+        if (inv.lateFeeType === "LUMP_SUM") {
+          accumulatedPenalty = value;
+        } else if (inv.lateFeeType === "PERCENTAGE") {
+          accumulatedPenalty = Number(inv.totalAmount) * (value / 100);
+        } else {
+          // DAILY rule (or fallback to legacy lateFeePerDay)
+          accumulatedPenalty = value > 0 
+            ? daysOverdue * value 
+            : daysOverdue * Number(inv.lateFeePerDay);
+        }
         
         // Only update database if the accumulated penalty is different
         if (accumulatedPenalty !== Number(inv.lateFeeAccumulated)) {

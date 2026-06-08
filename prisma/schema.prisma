@@ -389,6 +389,7 @@ model StudentEnrollment {
   academicYearId String
   sectionId      String
   rollNo         String?
+  termType       TermType @default(FULL_TERM)
   enrolledAt     DateTime @default(now())
 
   student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -644,6 +645,7 @@ model FeeStructure {
   amount         Decimal      @db.Decimal(10, 2)
   frequency      FeeFrequency @default(MONTHLY)
   dueDate        Int?
+  termType       TermType     @default(FULL_TERM)
 
   academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
   class        Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
@@ -651,7 +653,7 @@ model FeeStructure {
 
   invoiceItems InvoiceItem[]
 
-  @@unique([academicYearId, classId, feeCategoryId])
+  @@unique([academicYearId, classId, feeCategoryId, termType])
   @@map("fee_structures")
 }
 
@@ -662,7 +664,10 @@ model FeeInstallmentTemplate {
   name           String   // e.g. "Installment 1 (At Admission)", "Installment 2"
   amount         Decimal  @db.Decimal(10, 2)
   dueDate        DateTime
+  termType       TermType @default(FULL_TERM)
   lateFeeActive  Boolean  @default(false)
+  lateFeeType    LateFeeType @default(DAILY)
+  lateFeeValue   Decimal  @default(0) @db.Decimal(10, 2)
   lateFeePerDay  Decimal  @default(0) @db.Decimal(10, 2)
   lateFeeGrace   Int      @default(0) // grace days
 
@@ -671,6 +676,18 @@ model FeeInstallmentTemplate {
 
   @@index([classId])
   @@map("fee_installment_templates")
+}
+
+enum TermType {
+  FULL_TERM
+  HALF_TERM
+  SHORT_TERM
+}
+
+enum LateFeeType {
+  DAILY
+  LUMP_SUM
+  PERCENTAGE
 }
 
 enum FeeFrequency {
@@ -694,6 +711,8 @@ model Invoice {
   lateFeeAccumulated  Decimal       @default(0) @db.Decimal(10, 2)
   lateFeeWaived       Boolean       @default(false)
   lateFeeActive       Boolean       @default(false)
+  lateFeeType         LateFeeType   @default(DAILY)
+  lateFeeValue        Decimal       @default(0) @db.Decimal(10, 2)
   lateFeePerDay       Decimal       @default(0) @db.Decimal(10, 2)
   lateFeeGrace        Int           @default(0)
   proratedFromScheme  String?

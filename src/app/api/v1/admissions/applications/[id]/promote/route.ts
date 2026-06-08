@@ -37,6 +37,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     paymentMethod,
     transactionId,
     installments,
+    termType,
   } = body as {
     sectionId: string;
     rollNo?: string;
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     paymentMethod?: "CASH" | "ONLINE" | "CHEQUE" | "BANK_TRANSFER" | "UPI";
     transactionId?: string;
     installments?: { templateId: string; amount: number }[];
+    termType?: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
   };
 
   if (!sectionId) {
@@ -145,12 +147,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           academicYearId: application.academicYearId,
           sectionId,
           rollNo: rollNo || null,
+          termType: termType || "FULL_TERM",
         },
       });
 
-      // Calculate and generate invoices if fee structures exist for this class
+      // Calculate and generate invoices if fee structures exist for this class and student's term type
       const feeStructures = await tx.feeStructure.findMany({
-        where: { classId: application.classId },
+        where: { classId: application.classId, termType: termType || "FULL_TERM" },
         include: { feeCategory: { select: { name: true } } },
       });
 
@@ -173,7 +176,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         const discountMultiplier = 1 - discountPct / 100;
 
         // 1. Check if installment templates are setup or provided
-        let targetInstallments: { name: string; amount: number; dueDate: Date; lateFeeActive: boolean; lateFeePerDay: number; lateFeeGrace: number }[] = [];
+        let targetInstallments: { name: string; amount: number; dueDate: Date; lateFeeActive: boolean; lateFeeType: string; lateFeeValue: number; lateFeePerDay: number; lateFeeGrace: number }[] = [];
         
         if (installments && installments.length > 0) {
           // Resolve templates matching the IDs passed in request
@@ -189,6 +192,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
               amount: inst.amount,
               dueDate: temp?.dueDate || new Date(),
               lateFeeActive: temp?.lateFeeActive || false,
+              lateFeeType: temp?.lateFeeType || "DAILY",
+              lateFeeValue: temp ? Number(temp.lateFeeValue) : 0,
               lateFeePerDay: temp ? Number(temp.lateFeePerDay) : 0,
               lateFeeGrace: temp?.lateFeeGrace || 0,
             };
@@ -199,6 +204,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             where: {
               classId: application.classId,
               academicYearId: application.academicYearId,
+              termType: termType || "FULL_TERM",
             },
             orderBy: { dueDate: "asc" },
           });
@@ -209,6 +215,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
               amount: Number(t.amount),
               dueDate: t.dueDate,
               lateFeeActive: t.lateFeeActive,
+              lateFeeType: t.lateFeeType,
+              lateFeeValue: Number(t.lateFeeValue),
               lateFeePerDay: Number(t.lateFeePerDay),
               lateFeeGrace: t.lateFeeGrace,
             }));
@@ -242,6 +250,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
                 status: "PENDING",
                 dueDate: finalDueDate,
                 lateFeeActive: inst.lateFeeActive,
+                lateFeeType: (inst.lateFeeType || "DAILY") as any,
+                lateFeeValue: inst.lateFeeValue,
                 lateFeePerDay: inst.lateFeePerDay,
                 lateFeeGrace: inst.lateFeeGrace,
                 items: {
