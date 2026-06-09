@@ -69,6 +69,7 @@ interface ClassData {
   id: string;
   name: string;
   numericGrade: number;
+  status: "DRAFT" | "ACTIVE";
   branchId: string;
   academicYearId: string;
   subjects: Array<{
@@ -87,6 +88,7 @@ interface ClassData {
       subject: { id: string; name: string; code: string };
       staff: { id: string; name: string };
     }>;
+    _count?: { studentEnrollments: number };
   }>;
   feeStructures: Array<{
     id: string;
@@ -133,6 +135,16 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     initialData?.academicYearId || ""
   );
   const [activeTermTab, setActiveTermTab] = useState<"FULL_TERM" | "HALF_TERM" | "SHORT_TERM">("FULL_TERM");
+  const [activeMainTab, setActiveMainTab] = useState<string>("details");
+
+  const [classId, setClassId] = useState<string | null>(initialData?.id ?? null);
+  const [formMode, setFormMode] = useState<"create" | "edit">(mode);
+  const [status, setStatus] = useState<"DRAFT" | "ACTIVE">(initialData?.status ?? "DRAFT");
+
+  const hasEnrolledStudents = useMemo(() => {
+    if (!initialData) return false;
+    return initialData.sections.some((s: any) => (s._count?.studentEnrollments ?? 0) > 0);
+  }, [initialData]);
 
   // Selected subject master IDs — initialized from initialData so cleanup effect
   // doesn't strip teachers on the first render
@@ -452,37 +464,44 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     return sum + amt;
   }, 0);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function saveStep(targetTab: string) {
     setErrors({});
-
-    const termTypesList = ["FULL_TERM", "HALF_TERM", "SHORT_TERM"] as const;
-    for (const t of termTypesList) {
-      const termFees = fees.filter(f => f.termType === t);
-      const termInstallments = installments.filter(inst => inst.termType === t);
-
-      if (termFees.length > 0 || termInstallments.length > 0) {
-        const totalTermFees = termFees.reduce((sum, f) => {
-          const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
-          return sum + (isNaN(amt) ? 0 : amt);
-        }, 0);
-
-        const totalTermInstallments = termInstallments.reduce((sum, inst) => {
-          const amt = typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount;
-          return sum + (isNaN(amt) ? 0 : amt);
-        }, 0);
-
-        if (Math.abs(totalTermFees - totalTermInstallments) > 0.01) {
-          const termLabel = t === "FULL_TERM" ? "Full Term" : t === "HALF_TERM" ? "Half Term" : "Short Term";
-          snackbar.show(
-            `The sum of ${termLabel} installments (₹${totalTermInstallments.toLocaleString("en-IN")}) must equal the total ${termLabel} fee amount (₹${totalTermFees.toLocaleString("en-IN")}).`,
-            "error"
-          );
-          return;
+    
+    // 1. Validation based on current activeMainTab
+    if (activeMainTab === "details") {
+      if (!name.trim()) {
+        setErrors(prev => ({ ...prev, name: "Name is required" }));
+        return;
+      }
+      if (numericGrade === "") {
+        setErrors(prev => ({ ...prev, numericGrade: "Grade is required" }));
+        return;
+      }
+      if (!branchId) {
+        setErrors(prev => ({ ...prev, branchId: "Branch is required" }));
+        return;
+      }
+      if (!academicYearId) {
+        setErrors(prev => ({ ...prev, academicYearId: "Academic year is required" }));
+        return;
+      }
+    } else if (activeMainTab === "divisions") {
+      const divisionErrors: Record<string, string> = {};
+      let hasError = false;
+      sections.forEach((sec, idx) => {
+        if (!sec.name.trim()) {
+          divisionErrors[`sections.${idx}.name`] = "Division name is required";
+          hasError = true;
         }
+      });
+      if (hasError) {
+        setErrors(divisionErrors);
+        snackbar.show("Please correct the errors in the Divisions tab.", "error");
+        return;
       }
     }
 
+    // 2. Prepare payload
     const formattedInstallments = installments.map((inst) => ({
       ...(inst.id ? { id: inst.id } : {}),
       name: inst.name,
@@ -496,150 +515,124 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       lateFeeGrace: typeof inst.lateFeeGrace === "string" ? parseInt(inst.lateFeeGrace, 10) : inst.lateFeeGrace,
     }));
 
-    if (mode === "create") {
-      const formFields = {
-        name,
-        numericGrade: numericGrade !== "" ? parseInt(numericGrade, 10) : undefined,
-        branchId,
-        academicYearId,
-        subjectMasterIds: selectedSubjectMasterIds,
-        sections: sections.map((s) => ({
-          ...(s.id ? { id: s.id } : {}),
-          name: s.name,
-          classTeacherId: s.classTeacherId || null,
-          subjectTeachers: s.subjectTeachers.filter((st) => st.staffId),
-        })),
-        fees: fees.map((f) => ({
-          ...(f.id ? { id: f.id } : {}),
-          name: f.name,
-          amount:
-            typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
-          termType: f.termType,
-        })),
-        installments: formattedInstallments,
-      };
+    const subjectsPayload: Array<{ id: string } | { subjectMasterId: string }> = [];
+    for (const subj of selectedSubjects) {
+      if (subj.existingId) {
+        subjectsPayload.push({ id: subj.existingId });
+      } else if (subj.masterId) {
+        subjectsPayload.push({ subjectMasterId: subj.masterId });
+      }
+    }
 
-      const result = createClassSchema.safeParse(formFields);
-      if (!result.success) {
-        const fieldErrors: Record<string, string> = {};
-        let hasInstallmentError = false;
-        let hasFeeError = false;
-        let hasDivisionError = false;
-        for (const err of result.error.errors) {
-          const key = err.path.join(".");
-          if (!fieldErrors[key]) fieldErrors[key] = err.message;
-          if (key.startsWith("installments")) hasInstallmentError = true;
-          if (key.startsWith("fees")) hasFeeError = true;
-          if (key.startsWith("sections")) hasDivisionError = true;
+    const isNew = formMode === "create";
+    const endpoint = isNew ? "/api/v1/classes" : `/api/v1/classes/${classId}`;
+    const method = isNew ? "POST" : "PATCH";
+
+    const nextStatus = (status === "ACTIVE" || targetTab === "finish") ? "ACTIVE" : "DRAFT";
+
+    const payload = isNew 
+      ? {
+          name,
+          numericGrade: parseInt(numericGrade, 10),
+          branchId,
+          academicYearId,
+          subjectMasterIds: selectedSubjectMasterIds,
+          sections: sections.map((s) => ({
+            name: s.name,
+            classTeacherId: s.classTeacherId || null,
+            subjectTeachers: s.subjectTeachers.filter((st) => st.staffId),
+          })),
+          fees: fees.map((f) => ({
+            name: f.name,
+            amount: typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
+            termType: f.termType,
+          })),
+          installments: formattedInstallments,
+          status: nextStatus,
         }
-        setErrors(fieldErrors);
-        
-        if (hasInstallmentError || hasFeeError) {
-          snackbar.show("Please check validation errors in the Fees & Installments tab.", "error");
-        } else if (hasDivisionError) {
-          snackbar.show("Please check validation errors in the Divisions tab.", "error");
-        } else {
-          snackbar.show("Validation failed. Please correct the errors on the form.", "error");
+      : {
+          name,
+          numericGrade: parseInt(numericGrade, 10),
+          subjects: subjectsPayload,
+          sections: sections.map((s) => ({
+            ...(s.id ? { id: s.id } : {}),
+            name: s.name,
+            classTeacherId: s.classTeacherId || null,
+            subjectTeachers: s.subjectTeachers.filter((st) => st.staffId),
+          })),
+          fees: fees.map((f) => ({
+            ...(f.id ? { id: f.id } : {}),
+            name: f.name,
+            amount: typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
+            termType: f.termType,
+          })),
+          installments: formattedInstallments,
+          status: nextStatus,
+        };
+
+    // Sum verification on final submit
+    if (targetTab === "finish") {
+      const termTypesList = ["FULL_TERM", "HALF_TERM", "SHORT_TERM"] as const;
+      for (const t of termTypesList) {
+        const termFees = fees.filter(f => f.termType === t);
+        const termInstallments = installments.filter(inst => inst.termType === t);
+
+        if (termFees.length > 0 || termInstallments.length > 0) {
+          const totalTermFees = termFees.reduce((sum, f) => {
+            const amt = typeof f.amount === "string" ? parseFloat(f.amount) : f.amount;
+            return sum + (isNaN(amt) ? 0 : amt);
+          }, 0);
+
+          const totalTermInstallments = termInstallments.reduce((sum, inst) => {
+            const amt = typeof inst.amount === "string" ? parseFloat(inst.amount) : inst.amount;
+            return sum + (isNaN(amt) ? 0 : amt);
+          }, 0);
+
+          if (Math.abs(totalTermFees - totalTermInstallments) > 0.01) {
+            const termLabel = t === "FULL_TERM" ? "Full Term" : t === "HALF_TERM" ? "Half Term" : "Short Term";
+            snackbar.show(
+              `The sum of ${termLabel} installments (₹${totalTermInstallments.toLocaleString("en-IN")}) must equal the total ${termLabel} fee amount (₹${totalTermFees.toLocaleString("en-IN")}).`,
+              "error"
+            );
+            return;
+          }
         }
+      }
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        snackbar.show(data.error?.message ?? "Operation failed", "error");
         return;
       }
 
-      setLoading(true);
-      try {
-        const res = await fetch("/api/v1/classes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(result.data),
-        });
-        const data = await res.json();
-        if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to create class", "error");
-          return;
-        }
-        snackbar.show("Class created successfully", "success");
+      if (isNew) {
+        setClassId(data.data.id);
+        setFormMode("edit");
+      }
+      
+      setStatus(nextStatus);
+
+      if (targetTab === "finish") {
+        snackbar.show(isNew ? "Class created and activated successfully" : "Class updated and activated successfully", "success");
         router.push("/classes");
         router.refresh();
-      } catch {
-        snackbar.show("An error occurred", "error");
-      } finally {
-        setLoading(false);
+      } else {
+        snackbar.show("Draft changes saved", "success");
+        setActiveMainTab(targetTab);
       }
-    } else {
-      // Build subjects array for update
-      const subjectsPayload: Array<{ id: string } | { subjectMasterId: string }> = [];
-      for (const subj of selectedSubjects) {
-        if (subj.existingId) {
-          subjectsPayload.push({ id: subj.existingId });
-        } else if (subj.masterId) {
-          subjectsPayload.push({ subjectMasterId: subj.masterId });
-        }
-      }
-
-      const formFields = {
-        name,
-        numericGrade: numericGrade !== "" ? parseInt(numericGrade, 10) : undefined,
-        subjects: subjectsPayload,
-        sections: sections.map((s) => ({
-          ...(s.id ? { id: s.id } : {}),
-          name: s.name,
-          classTeacherId: s.classTeacherId || null,
-          subjectTeachers: s.subjectTeachers.filter((st) => st.staffId),
-        })),
-        fees: fees.map((f) => ({
-          ...(f.id ? { id: f.id } : {}),
-          name: f.name,
-          amount:
-            typeof f.amount === "string" ? parseFloat(f.amount) : f.amount,
-          termType: f.termType,
-        })),
-        installments: formattedInstallments,
-      };
-
-      const result = updateClassSchema.safeParse(formFields);
-      if (!result.success) {
-        const fieldErrors: Record<string, string> = {};
-        let hasInstallmentError = false;
-        let hasFeeError = false;
-        let hasDivisionError = false;
-        for (const err of result.error.errors) {
-          const key = err.path.join(".");
-          if (!fieldErrors[key]) fieldErrors[key] = err.message;
-          if (key.startsWith("installments")) hasInstallmentError = true;
-          if (key.startsWith("fees")) hasFeeError = true;
-          if (key.startsWith("sections")) hasDivisionError = true;
-        }
-        setErrors(fieldErrors);
-
-        if (hasInstallmentError || hasFeeError) {
-          snackbar.show("Please check validation errors in the Fees & Installments tab.", "error");
-        } else if (hasDivisionError) {
-          snackbar.show("Please check validation errors in the Divisions tab.", "error");
-        } else {
-          snackbar.show("Validation failed. Please correct the errors on the form.", "error");
-        }
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/v1/classes/${initialData!.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(result.data),
-        });
-        const data = await res.json();
-        if (!data.success) {
-          snackbar.show(data.error?.message ?? "Failed to update class", "error");
-          return;
-        }
-        snackbar.show("Class updated successfully", "success");
-        router.push("/classes");
-        router.refresh();
-      } catch {
-        snackbar.show("An error occurred", "error");
-      } finally {
-        setLoading(false);
-      }
+    } catch (err) {
+      console.error("Save step error:", err);
+      snackbar.show("An error occurred", "error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -722,14 +715,25 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
+    <form onSubmit={(e) => { e.preventDefault(); saveStep("finish"); }} className="mx-auto max-w-2xl">
+      {hasEnrolledStudents && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2.5 animate-fadeIn">
+          <Icon name="warning" size={20} className="text-amber-600 mt-0.5" />
+          <div>
+            <strong className="font-bold block text-sm">वर्ग लॉक आहे (Class Locked)</strong>
+            <span className="text-xs">
+              या वर्गात विद्यार्थी प्रवेशित असल्यामुळे मुख्य तपशील, तुकड्या डिलीट करणे आणि फी स्ट्रक्चरमध्ये बदल करणे प्रतिबंधित केले आहे.
+            </span>
+          </div>
+        </div>
+      )}
       <Card variant="outlined">
         <CardContent className="p-6">
-          <Tabs defaultValue="details">
+          <Tabs value={activeMainTab} onValueChange={setActiveMainTab}>
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="divisions">Divisions</TabsTrigger>
-              <TabsTrigger value="fees-and-installments">Fees & Installments</TabsTrigger>
+              <TabsTrigger value="divisions" disabled={!classId}>Divisions</TabsTrigger>
+              <TabsTrigger value="fees-and-installments" disabled={!classId}>Fees & Installments</TabsTrigger>
             </TabsList>
 
             {/* ── Details Tab ── */}
@@ -742,6 +746,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   error={errors.name}
                   placeholder="e.g. Class 1"
                   required
+                  disabled={hasEnrolledStudents}
                   fullWidth
                 />
                 <TextField
@@ -752,6 +757,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   error={errors.numericGrade}
                   placeholder="e.g. 1"
                   required
+                  disabled={hasEnrolledStudents}
                   fullWidth
                 />
               </div>
@@ -767,7 +773,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                     <Select
                       value={branchId}
                       onValueChange={setBranchId}
-                      disabled={mode === "edit"}
+                      disabled={hasEnrolledStudents || formMode === "edit"}
                     >
                       <SelectTrigger fullWidth>
                         <SelectValue
@@ -798,7 +804,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   <Select
                     value={academicYearId}
                     onValueChange={setAcademicYearId}
-                    disabled={mode === "edit"}
+                    disabled={hasEnrolledStudents || formMode === "edit"}
                   >
                     <SelectTrigger fullWidth>
                       <SelectValue
@@ -857,6 +863,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   labelFormatter={(n) =>
                     `${n} subject${n !== 1 ? "s" : ""} selected`
                   }
+                  disabled={hasEnrolledStudents}
                   fullWidth
                 />
               </div>
@@ -868,14 +875,16 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                 <p className="text-label-lg font-medium text-on-surface">
                   Divisions
                 </p>
-                <Button
-                  type="button"
-                  variant="text"
-                  icon="add"
-                  onClick={addSection}
-                >
-                  Add Division
-                </Button>
+                {!hasEnrolledStudents && (
+                  <Button
+                    type="button"
+                    variant="text"
+                    icon="add"
+                    onClick={addSection}
+                  >
+                    Add Division
+                  </Button>
+                )}
               </div>
               {errors.sections && (
                 <p className="px-4 text-[12px] leading-4 text-error">
@@ -892,7 +901,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                       <p className="text-label-lg font-medium text-on-surface">
                         Division{section.name ? ` ${section.name}` : ""}
                       </p>
-                      {sections.length > 1 && (
+                      {sections.length > 1 && !hasEnrolledStudents && (
                         <button
                           type="button"
                           onClick={() => removeSection(sectionIndex)}
@@ -911,6 +920,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                         updateSectionName(sectionIndex, e.target.value)
                       }
                       error={errors[`sections.${sectionIndex}.name`]}
+                      disabled={hasEnrolledStudents}
                       fullWidth
                     />
 
@@ -1059,14 +1069,16 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                         Define categories and annual fees for this term.
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="text"
-                      icon="add"
-                      onClick={() => addFee(activeTermTab)}
-                    >
-                      Add Fee Row
-                    </Button>
+                    {!hasEnrolledStudents && (
+                      <Button
+                        type="button"
+                        variant="text"
+                        icon="add"
+                        onClick={() => addFee(activeTermTab)}
+                      >
+                        Add Fee Row
+                      </Button>
+                    )}
                   </div>
 
                   <div className="space-y-3">
@@ -1084,6 +1096,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateFee(index, "name", e.target.value)
                               }
                               error={errors[`fees.${index}.name`]}
+                              disabled={hasEnrolledStudents}
                               fullWidth
                             />
                           </div>
@@ -1097,16 +1110,19 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateFee(index, "amount", e.target.value)
                               }
                               error={errors[`fees.${index}.amount`]}
+                              disabled={hasEnrolledStudents}
                               fullWidth
                             />
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => removeFee(index)}
-                            className="rounded-full p-2 hover:bg-rose-50 text-rose-500 hover:text-rose-700 mt-1 cursor-pointer transition-colors"
-                          >
-                            <Icon name="close" size={20} />
-                          </button>
+                          {!hasEnrolledStudents && (
+                            <button
+                              type="button"
+                              onClick={() => removeFee(index)}
+                              className="rounded-full p-2 hover:bg-rose-50 text-rose-500 hover:text-rose-700 mt-1 cursor-pointer transition-colors"
+                            >
+                              <Icon name="close" size={20} />
+                            </button>
+                          )}
                         </div>
                       ))}
 
@@ -1129,14 +1145,16 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                         Divide the total fee of this term into installments.
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="text"
-                      icon="add"
-                      onClick={() => addInstallment(activeTermTab)}
-                    >
-                      Add Installment
-                    </Button>
+                    {!hasEnrolledStudents && (
+                      <Button
+                        type="button"
+                        variant="text"
+                        icon="add"
+                        onClick={() => addInstallment(activeTermTab)}
+                      >
+                        Add Installment
+                      </Button>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -1152,13 +1170,15 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                             <p className="text-label-sm font-bold text-primary">
                               Installment #{mappedIdx + 1}
                             </p>
-                            <button
-                              type="button"
-                              onClick={() => removeInstallment(index)}
-                              className="rounded-full p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 cursor-pointer transition-colors"
-                            >
-                              <Icon name="close" size={18} />
-                            </button>
+                            {!hasEnrolledStudents && (
+                              <button
+                                type="button"
+                                onClick={() => removeInstallment(index)}
+                                className="rounded-full p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 cursor-pointer transition-colors"
+                              >
+                                <Icon name="close" size={18} />
+                              </button>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1170,6 +1190,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateInstallment(index, "name", e.target.value)
                               }
                               error={errors[`installments.${index}.name`]}
+                              disabled={hasEnrolledStudents}
                               required
                               fullWidth
                             />
@@ -1182,6 +1203,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateInstallment(index, "amount", e.target.value)
                               }
                               error={errors[`installments.${index}.amount`]}
+                              disabled={hasEnrolledStudents}
                               required
                               fullWidth
                             />
@@ -1193,6 +1215,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 updateInstallment(index, "dueDate", e.target.value)
                               }
                               error={errors[`installments.${index}.dueDate`]}
+                              disabled={hasEnrolledStudents}
                               required
                               fullWidth
                             />
@@ -1208,6 +1231,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 onChange={(e) =>
                                   updateInstallment(index, "lateFeeActive", e.target.checked)
                                 }
+                                disabled={hasEnrolledStudents}
                                 className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40"
                               />
                               <label
@@ -1234,6 +1258,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                         updateInstallment(index, "lateFeePerDay", 0);
                                       }
                                     }}
+                                    disabled={hasEnrolledStudents}
                                   >
                                     <SelectTrigger fullWidth>
                                       <SelectValue placeholder="Select Type" />
@@ -1267,6 +1292,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                     }
                                   }}
                                   error={errors[`installments.${index}.lateFeeValue`]}
+                                  disabled={hasEnrolledStudents}
                                   required
                                   fullWidth
                                 />
@@ -1280,6 +1306,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                     updateInstallment(index, "lateFeeGrace", e.target.value)
                                   }
                                   error={errors[`installments.${index}.lateFeeGrace`]}
+                                  disabled={hasEnrolledStudents}
                                   required
                                   fullWidth
                                 />
@@ -1365,9 +1392,87 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
         >
           Cancel
         </Button>
-        <Button type="submit" variant="filled" loading={loading} icon="save">
-          {mode === "create" ? "Create Class" : "Save Changes"}
-        </Button>
+        
+        {/* Render buttons dynamically based on wizard tab */}
+        {activeMainTab === "details" && (
+          <>
+            {status === "ACTIVE" && (
+              <Button
+                type="button"
+                variant="filled"
+                loading={loading}
+                icon="save"
+                onClick={() => saveStep("finish")}
+              >
+                Save Changes
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="filled"
+              loading={loading}
+              icon="arrow_forward"
+              onClick={() => saveStep("divisions")}
+            >
+              Save & Continue
+            </Button>
+          </>
+        )}
+
+        {activeMainTab === "divisions" && (
+          <>
+            <Button
+              type="button"
+              variant="outlined"
+              icon="arrow_back"
+              onClick={() => setActiveMainTab("details")}
+            >
+              Back
+            </Button>
+            {status === "ACTIVE" && (
+              <Button
+                type="button"
+                variant="filled"
+                loading={loading}
+                icon="save"
+                onClick={() => saveStep("finish")}
+              >
+                Save Changes
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="filled"
+              loading={loading}
+              icon="arrow_forward"
+              onClick={() => saveStep("fees-and-installments")}
+            >
+              Save & Continue
+            </Button>
+          </>
+        )}
+
+        {activeMainTab === "fees-and-installments" && (
+          <>
+            <Button
+              type="button"
+              variant="outlined"
+              icon="arrow_back"
+              onClick={() => setActiveMainTab("divisions")}
+            >
+              Back
+            </Button>
+            <Button
+              type="button"
+              variant="filled"
+              loading={loading}
+              icon="check"
+              onClick={() => saveStep("finish")}
+            >
+              {status === "ACTIVE" ? "Save Changes" : "Finish & Activate"}
+            </Button>
+          </>
+        )}
       </div>
     </form>
   );

@@ -59,6 +59,7 @@ export const createClassSchema = z.object({
     .min(1, "At least one division is required"),
   fees: z.array(inlineFeeSchema).default([]),
   installments: z.array(inlineInstallmentSchema).default([]),
+  status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
 });
 
 // For update, subjects are expressed as an array of { id } (keep) or { subjectMasterId } (add new)
@@ -85,6 +86,7 @@ export const updateClassSchema = z.object({
   sections: z.array(sectionSchema).optional(),
   fees: z.array(inlineFeeSchema).optional(),
   installments: z.array(inlineInstallmentSchema).optional(),
+  status: z.enum(["DRAFT", "ACTIVE"]).optional(),
 });
 
 export type CreateClassInput = z.infer<typeof createClassSchema>;

@@ -189,18 +189,20 @@ test.describe("Ultra-Deep Behavioral & Integration Test Suite", () => {
   });
 
   test("Test 3: Concurrency & Double-Click Race Condition Verification", async ({ request }) => {
-    // 1. Get active student and their invoice details
-    const student = await prisma.student.findFirst({
+    // 1. Get all active students with unpaid invoices
+    const activeStudents = await prisma.student.findMany({
       where: {
         status: "ACTIVE",
-        invoices: { some: { status: { not: "CANCELLED" } } }
+        invoices: { some: { status: { in: ["PENDING", "PARTIAL", "OVERDUE"] } } }
       },
       include: {
-        invoices: { where: { status: { not: "CANCELLED" } } }
+        invoices: { where: { status: { in: ["PENDING", "PARTIAL", "OVERDUE"] } } }
       }
     });
-    if (!student || student.invoices.length === 0) throw new Error("No active student with invoices found for concurrency testing");
+    if (activeStudents.length === 0) throw new Error("No active student with unpaid invoices found for concurrency testing");
 
+    // Pick a student with exactly 1 unpaid invoice to guarantee overpayment boundary is hit
+    const student = activeStudents.find((s) => s.invoices.length === 1) || activeStudents[0];
     const invoice = student.invoices[0];
     const pendingAmount = Number(invoice.totalAmount) - Number(invoice.paidAmount);
     

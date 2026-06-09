@@ -19,9 +19,7 @@ export async function GET(req: NextRequest) {
 
   const ctx = getTenantContext(req);
   const url = new URL(req.url);
-  const { page, limit: parsedLimit, search } = parsePagination(url);
-  const limitParam = url.searchParams.get("limit");
-  const limit = limitParam === "9999" ? 10000 : parsedLimit;
+  const { page, limit, search } = parsePagination(url);
   const branchId = url.searchParams.get("branchId");
 
   const where: Record<string, any> = {
@@ -56,7 +54,20 @@ export async function GET(req: NextRequest) {
       prisma.notice.count({ where }),
     ]);
 
-    return apiSuccess(rows, { page, limit, total });
+    const mappedRows = rows.map((row) => {
+      let parsedRoles: string[] = [];
+      try {
+        parsedRoles = JSON.parse(row.targetRoles);
+      } catch {
+        parsedRoles = [];
+      }
+      return {
+        ...row,
+        targetRoles: parsedRoles,
+      };
+    });
+
+    return apiSuccess(mappedRows, { page, limit, total });
   } catch (error) {
     console.error("List notices error:", error);
     return apiError("INTERNAL_ERROR", "Failed to list notices", 500);
@@ -120,7 +131,7 @@ export async function POST(req: NextRequest) {
         branchId: data.branchId || null,
         title: data.title,
         content: data.content,
-        targetRoles: data.targetRoles,
+        targetRoles: JSON.stringify(data.targetRoles),
         isPublished: isPublishedVal,
         publishedAt: publishedAtVal,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
@@ -141,7 +152,21 @@ export async function POST(req: NextRequest) {
       details: { title: notice.title, isPublished: notice.isPublished },
     });
 
-    return apiSuccess(notice, undefined, 201);
+    let parsedRoles: string[] = [];
+    try {
+      parsedRoles = JSON.parse(notice.targetRoles);
+    } catch {
+      parsedRoles = [];
+    }
+
+    return apiSuccess(
+      {
+        ...notice,
+        targetRoles: parsedRoles,
+      },
+      undefined,
+      201
+    );
   } catch (error) {
     console.error("Create notice error:", error);
     return apiError("INTERNAL_ERROR", "Failed to create notice", 500);

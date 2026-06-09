@@ -182,6 +182,29 @@ export async function GET(req: NextRequest, context: RouteContext) {
         className,
       },
       invoice: consolidatedInvoice,
+      invoices: activeInvoices.map((inv) => ({
+        id: inv.id,
+        number: inv.number,
+        totalAmount: Number(inv.totalAmount) + Number(inv.lateFeeAccumulated),
+        paidAmount: Number(inv.paidAmount),
+        pendingAmount: Number(inv.totalAmount) + Number(inv.lateFeeAccumulated) - Number(inv.paidAmount),
+        status: inv.status,
+        dueDate: inv.dueDate,
+        items: [
+          ...inv.items.map((item) => ({
+            id: item.id,
+            description: item.description,
+            amount: Number(item.amount),
+          })),
+          ...(Number(inv.lateFeeAccumulated) > 0
+            ? [{
+                id: `late-fee-${inv.id}`,
+                description: "Late Fee Penalty",
+                amount: Number(inv.lateFeeAccumulated),
+              }]
+            : [])
+        ]
+      })),
       payments: payments.map((p) => ({
         id: p.id,
         receiptNo: p.receiptNo,
@@ -239,7 +262,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     // Find active unpaid invoices
-    const unpaidInvoices = await prisma.invoice.findMany({
+    let unpaidInvoices = await prisma.invoice.findMany({
       where: {
         studentId,
         status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -249,6 +272,15 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
     if (unpaidInvoices.length === 0) {
       return apiError("BAD_REQUEST", "No outstanding dues found for this student", 400);
+    }
+
+    // Prioritize selected invoice if provided
+    if (data.invoiceId) {
+      const targetIndex = unpaidInvoices.findIndex((inv) => inv.id === data.invoiceId);
+      if (targetIndex > -1) {
+        const [targetInv] = unpaidInvoices.splice(targetIndex, 1);
+        unpaidInvoices = [targetInv, ...unpaidInvoices];
+      }
     }
 
     let totalPending = 0;
@@ -267,12 +299,21 @@ export async function POST(req: NextRequest, context: RouteContext) {
     // Create payment + update invoices in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // 1. Lock all unpaid invoices to prevent concurrency race conditions
-      const freshInvoices = await tx.$queryRaw<any[]>`
+      let freshInvoices = await tx.$queryRaw<any[]>`
         SELECT id, totalAmount, paidAmount, lateFeeAccumulated, status, number FROM invoices 
         WHERE studentId = ${studentId} AND status IN ('PENDING', 'PARTIAL', 'OVERDUE') 
         ORDER BY dueDate ASC 
         FOR UPDATE
       `;
+
+      // Prioritize selected invoice inside the locked transaction list
+      if (data.invoiceId) {
+        const targetIndex = freshInvoices.findIndex((inv) => inv.id === data.invoiceId);
+        if (targetIndex > -1) {
+          const [targetInv] = freshInvoices.splice(targetIndex, 1);
+          freshInvoices = [targetInv, ...freshInvoices];
+        }
+      }
 
       // 1.5 Verify that the payment amount does not exceed the remaining outstanding balance inside the transaction
       let freshTotalPending = 0;

@@ -57,6 +57,13 @@ export default function FeesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [branchFilter, setBranchFilter] = useState("ALL");
 
+  // Sync local branch filter with the global session branch
+  useEffect(() => {
+    if (session?.user?.branchId) {
+      setBranchFilter(session.user.branchId);
+    }
+  }, [session?.user?.branchId]);
+
   const fetchFees = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();

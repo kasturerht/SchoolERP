@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
       where: {
         branchId: targetBranchId,
         academicYearId: targetYearId,
+        status: "ACTIVE",
       },
       select: {
         id: true,
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
     return apiValidationError(parsed.error);
   }
 
-  const { name, numericGrade, branchId, academicYearId, sections, fees, installments, subjectMasterIds } =
+  const { name, numericGrade, branchId, academicYearId, sections, fees, installments, subjectMasterIds, status } =
     parsed.data;
 
   // Enforce sum match for each term type (FULL_TERM, HALF_TERM, SHORT_TERM) individually
@@ -254,6 +255,7 @@ export async function POST(req: NextRequest) {
           academicYearId,
           name,
           numericGrade,
+          status,
         },
       });
 

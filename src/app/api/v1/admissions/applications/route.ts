@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
 
     // Validate class belongs to branch
     const cls = await prisma.class.findFirst({
-      where: { id: data.classId, branchId: data.branchId },
+      where: { id: data.classId, branchId: data.branchId, status: "ACTIVE" },
     });
     if (!cls) {
       return apiError("NOT_FOUND", "Class not found in target branch", 404);

@@ -79,6 +79,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
         academicYearId,
         name: "SV-Test-Class",
         numericGrade: 11,
+        status: "ACTIVE",
       }
     });
     classId = testClass.id;

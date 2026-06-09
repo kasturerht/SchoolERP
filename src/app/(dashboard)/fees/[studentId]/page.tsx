@@ -9,6 +9,7 @@ import { PermissionGate } from "@/components/shared/permission-gate";
 import { PaymentForm } from "@/components/fees/payment-form";
 import { PaymentHistory } from "@/components/fees/payment-history";
 import { FormSkeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { CreateFeePaymentInput } from "@/lib/validations/fee-payment";
 
 interface StudentInfo {
@@ -51,24 +52,18 @@ interface Payment {
 interface FeeData {
   student: StudentInfo;
   invoice: InvoiceInfo | null;
+  invoices: InvoiceInfo[];
   payments: Payment[];
 }
 
 const formatCurrency = (amount: number) =>
   `₹${amount.toLocaleString("en-IN")}`;
 
-const invoiceStatusColor = (status: string) => {
-  switch (status) {
-    case "PAID":
-      return "success" as const;
-    case "PARTIAL":
-      return "primary" as const;
-    case "OVERDUE":
-      return "error" as const;
-    case "PENDING":
-    default:
-      return "default" as const;
-  }
+const getInstallmentLabel = (inv: InvoiceInfo, idx: number) => {
+  const desc = inv.items.map(i => i.description?.toLowerCase() || "").join(" ");
+  if (desc.includes("admission")) return "Installment #1 - Admission Fees";
+  if (desc.includes("last")) return "Installment #2 - Last Installment";
+  return `Installment #${idx + 1}`;
 };
 
 export default function FeeCollectionPage() {
@@ -79,6 +74,7 @@ export default function FeeCollectionPage() {
   const [data, setData] = useState<FeeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -101,6 +97,18 @@ export default function FeeCollectionPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Auto-select oldest unpaid invoice on initial load
+  useEffect(() => {
+    if (data?.invoices && data.invoices.length > 0) {
+      const unpaid = data.invoices.find((inv) => inv.status !== "PAID");
+      if (unpaid) {
+        setSelectedInvoiceId(unpaid.id);
+      } else {
+        setSelectedInvoiceId(data.invoices[0].id);
+      }
+    }
+  }, [data]);
 
   async function handlePayment(formData: CreateFeePaymentInput) {
     setSubmitting(true);
@@ -148,8 +156,12 @@ export default function FeeCollectionPage() {
 
   if (!data) return null;
 
-  const { student, invoice, payments } = data;
-  const isPaid = invoice?.status === "PAID";
+  const { student, invoices, payments } = data;
+  
+  // Find selected invoice info
+  const selectedInvoice = invoices.find((inv) => inv.id === selectedInvoiceId) || invoices[0];
+  const isPaid = selectedInvoice?.status === "PAID";
+  const totalPendingAll = invoices.reduce((sum, inv) => sum + inv.pendingAmount, 0);
 
   return (
     <div>
@@ -167,103 +179,127 @@ export default function FeeCollectionPage() {
 
       <div className="space-y-6">
         {/* Student Info */}
-        <div className="rounded-md border border-outline-variant bg-surface p-4">
-          <h2 className="text-title-md font-medium text-on-surface mb-3">
+        <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm">
+          <h2 className="text-title-md font-bold text-on-surface mb-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-slate-400">person</span>
             Student Information
           </h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <p className="text-label-md text-on-surface-variant">Name</p>
-              <p className="text-body-lg text-on-surface font-medium">
+              <p className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Name</p>
+              <p className="text-sm font-semibold text-slate-700 mt-0.5">
                 {student.firstName} {student.lastName}
               </p>
             </div>
             <div>
-              <p className="text-label-md text-on-surface-variant">
-                Admission No
-              </p>
-              <p className="text-body-lg text-on-surface">
+              <p className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Admission No</p>
+              <p className="text-sm font-semibold text-slate-700 mt-0.5 font-mono">
                 {student.admissionNo}
               </p>
             </div>
             <div>
-              <p className="text-label-md text-on-surface-variant">Class</p>
-              <p className="text-body-lg text-on-surface">
+              <p className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Class</p>
+              <p className="text-sm font-semibold text-slate-700 mt-0.5">
                 {student.className ?? "—"}
               </p>
             </div>
             <div>
-              <p className="text-label-md text-on-surface-variant">Branch</p>
-              <p className="text-body-lg text-on-surface">
+              <p className="text-[10px] font-bold text-on-surface-variant/80 uppercase tracking-wider">Branch</p>
+              <p className="text-sm font-semibold text-slate-700 mt-0.5">
                 {student.branchName}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Invoice Breakdown */}
-        {invoice ? (
-          <div className="rounded-md border border-outline-variant bg-surface p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-title-md font-medium text-on-surface">
-                Invoice Breakdown
-              </h2>
-              <Chip
-                label={invoice.status}
-                variant="filled"
-                color={invoiceStatusColor(invoice.status)}
-              />
-            </div>
+        {/* Installments Selection Row */}
+        {invoices.length > 0 ? (
+          <div className="space-y-3">
+            <h2 className="text-title-md font-bold text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-slate-400">splitscreen</span>
+              Select Installment to Pay
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {invoices.map((inv, idx) => {
+                const isSelected = selectedInvoiceId === inv.id;
+                const isOverdue = inv.status === "OVERDUE" || (inv.status !== "PAID" && new Date(inv.dueDate) < new Date());
+                return (
+                  <div
+                    key={inv.id}
+                    className={cn(
+                      "cursor-pointer rounded-2xl border p-5 transition-all duration-300 relative select-none flex flex-col justify-between shadow-sm",
+                      isSelected
+                        ? "border-primary bg-primary/5 shadow-md ring-1 ring-primary"
+                        : "border-outline-variant/60 bg-surface hover:border-slate-400 hover:shadow"
+                    )}
+                    onClick={() => setSelectedInvoiceId(inv.id)}
+                  >
+                    {/* Selected Badge Indicator */}
+                    {isSelected && (
+                      <div className="absolute -top-2 -right-2 bg-primary text-white w-6 h-6 rounded-full flex items-center justify-center border border-white shadow">
+                        <span className="material-symbols-outlined text-[14px] font-bold">check</span>
+                      </div>
+                    )}
 
-            {/* Fee Items */}
-            <div className="space-y-2 mb-4">
-              {invoice.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between py-1"
-                >
-                  <span className="text-body-md text-on-surface">
-                    {item.description || "Fee"}
-                  </span>
-                  <span className="text-body-md text-on-surface font-medium">
-                    {formatCurrency(item.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
+                    {/* Top Row: Installment Title & Status */}
+                    <div className="flex justify-between items-start mb-3 gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-slate-400">receipt_long</span>
+                        <span className="font-bold text-sm text-slate-800">{getInstallmentLabel(inv, idx)}</span>
+                      </div>
+                      <span className={cn(
+                        "px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border shrink-0",
+                        inv.status === "PAID"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                          : isOverdue
+                          ? "bg-rose-50 text-rose-700 border-rose-200/60 animate-pulse"
+                          : inv.status === "PARTIAL"
+                          ? "bg-sky-50 text-sky-700 border-sky-200/60"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
+                      )}>
+                        {isOverdue && inv.status !== "PAID" ? "OVERDUE" : inv.status}
+                      </span>
+                    </div>
 
-            <hr className="border-outline-variant mb-4" />
+                    {/* Middle Row: Due Date & Invoice No */}
+                    <div className="text-[11px] text-slate-400 font-semibold mb-4 flex justify-between">
+                      <span>Invoice: {inv.number}</span>
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">calendar_today</span>
+                        Due: {new Date(inv.dueDate).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
 
-            {/* Summary */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <p className="text-label-md text-on-surface-variant">Total</p>
-                <p className="text-title-lg font-medium text-on-surface">
-                  {formatCurrency(invoice.totalAmount)}
-                </p>
-              </div>
-              <div>
-                <p className="text-label-md text-on-surface-variant">Paid</p>
-                <p className="text-title-lg font-medium text-success">
-                  {formatCurrency(invoice.paidAmount)}
-                </p>
-              </div>
-              <div>
-                <p className="text-label-md text-on-surface-variant">
-                  Remaining
-                </p>
-                <p
-                  className={`text-title-lg font-medium ${
-                    invoice.pendingAmount > 0 ? "text-error" : "text-success"
-                  }`}
-                >
-                  {formatCurrency(invoice.pendingAmount)}
-                </p>
-              </div>
+                    {/* Bottom Row: Breakdown metrics */}
+                    <div className="grid grid-cols-3 gap-1.5 border-t pt-3.5 text-center">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Total</span>
+                        <span className="text-xs font-semibold text-slate-700">{formatCurrency(inv.totalAmount)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Paid</span>
+                        <span className="text-xs font-semibold text-emerald-600">{formatCurrency(inv.paidAmount)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Pending</span>
+                        <span className={cn(
+                          "text-xs font-black block", 
+                          inv.pendingAmount > 0 
+                            ? isOverdue ? "text-rose-700" : "text-rose-500" 
+                            : "text-emerald-600"
+                        )}>
+                          {formatCurrency(inv.pendingAmount)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
-          <div className="rounded-md border border-outline-variant bg-surface p-6 text-center">
+          <div className="rounded-2xl border border-outline-variant bg-surface p-6 text-center shadow-sm">
             <span className="material-symbols-outlined text-[48px] text-on-surface-variant mb-2">
               receipt_long
             </span>
@@ -273,39 +309,125 @@ export default function FeeCollectionPage() {
           </div>
         )}
 
-        {/* Record Payment */}
-        {invoice && !isPaid && (
-          <PermissionGate module="fees" action="create">
-            <div className="rounded-md border border-outline-variant bg-surface p-4">
-              <h2 className="text-title-md font-medium text-on-surface mb-4">
-                Record Payment
-              </h2>
-              <PaymentForm
-                pendingAmount={invoice.pendingAmount}
-                onSubmit={handlePayment}
-                submitting={submitting}
-              />
+        {/* Selected Invoice Details & Payment Form Panel */}
+        {selectedInvoice && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Left: Selected Installment Details */}
+            <div className="md:col-span-2 rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm space-y-4">
+              <h3 className="text-title-md font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
+                <span className="material-symbols-outlined text-primary">analytics</span>
+                Invoice Breakdown: {getInstallmentLabel(selectedInvoice, invoices.findIndex(i => i.id === selectedInvoice.id))}
+              </h3>
+
+              <div className="space-y-3">
+                {selectedInvoice.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between py-1.5 px-1 hover:bg-slate-50 rounded transition-colors"
+                  >
+                    <span className="text-sm font-semibold text-slate-700">
+                      {item.description || "Fee Item"}
+                    </span>
+                    <span className="text-sm font-bold text-slate-800">
+                      {formatCurrency(item.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <hr className="border-outline-variant" />
+
+              <div className="grid grid-cols-3 gap-4 bg-slate-50/50 p-4 rounded-xl text-center">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Installment Total</p>
+                  <p className="text-base font-black text-slate-700 mt-1">
+                    {formatCurrency(selectedInvoice.totalAmount)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Paid Amount</p>
+                  <p className="text-base font-black text-emerald-600 mt-1">
+                    {formatCurrency(selectedInvoice.paidAmount)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remaining Balance</p>
+                  <p className={cn(
+                    "text-base font-black mt-1",
+                    selectedInvoice.pendingAmount > 0 ? "text-rose-600" : "text-emerald-600"
+                  )}>
+                    {formatCurrency(selectedInvoice.pendingAmount)}
+                  </p>
+                </div>
+              </div>
             </div>
-          </PermissionGate>
+
+            {/* Right: Record Payment Form or Success State */}
+            <div className="rounded-2xl border border-outline-variant bg-surface p-5 shadow-sm flex flex-col justify-between">
+              <div>
+                <h3 className="text-title-md font-bold text-slate-800 flex items-center gap-2 border-b pb-2 mb-4">
+                  <span className="material-symbols-outlined text-primary">payments</span>
+                  Record Payment
+                </h3>
+
+                {!isPaid ? (
+                  <PermissionGate module="fees" action="create">
+                    <div className="space-y-4">
+                      {/* Helper badge telling the operator which invoice they are paying */}
+                      <div className="p-3 bg-primary/5 text-primary border border-primary/20 rounded-xl text-xs font-semibold flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px]">info</span>
+                        <span>
+                          Paying for <strong>{selectedInvoice.number}</strong>
+                        </span>
+                      </div>
+
+                      <PaymentForm
+                        pendingAmount={selectedInvoice.pendingAmount}
+                        invoiceId={selectedInvoice.id}
+                        onSubmit={handlePayment}
+                        submitting={submitting}
+                      />
+                    </div>
+                  </PermissionGate>
+                ) : (
+                  <div className="py-6 text-center space-y-3">
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                      <span className="material-symbols-outlined text-[24px]">check_circle</span>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-black text-slate-800">Installment Fully Collected</p>
+                      <p className="text-xs text-slate-400 font-semibold px-2">
+                        {totalPendingAll > 0 
+                          ? "Select another pending installment card above to record a payment."
+                          : "All fees have been collected for this academic year."
+                        }
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* Paid message */}
-        {invoice && isPaid && (
-          <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950 p-4 text-center">
-            <span className="material-symbols-outlined text-[36px] text-success mb-1">
-              check_circle
+        {/* Global Paid Message (if all invoices are paid) */}
+        {invoices.length > 0 && totalPendingAll === 0 && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center shadow-sm">
+            <span className="material-symbols-outlined text-[36px] text-emerald-500 mb-1">
+              verified
             </span>
-            <p className="text-body-lg text-success font-medium">
-              All fees have been collected
+            <p className="text-sm font-black text-emerald-800">
+              Account Clear: All student fees have been collected successfully.
             </p>
           </div>
         )}
 
         {/* Payment History */}
         {payments.length > 0 && (
-          <div>
-            <h2 className="text-title-md font-medium text-on-surface mb-3">
-              Payment History
+          <div className="space-y-3">
+            <h2 className="text-title-md font-bold text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-slate-400">history</span>
+              Payment Receipt Ledger
             </h2>
             <PaymentHistory payments={payments} />
           </div>

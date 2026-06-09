@@ -187,7 +187,7 @@ export default function BulkPromotionPage() {
     }
     setLoadingStudents(true);
     try {
-      const res = await fetch(`/api/v1/students?sectionId=${sourceSectionId}&limit=100`);
+      const res = await fetch(`/api/v1/students?sectionId=${sourceSectionId}&limit=9999`);
       const data = await res.json();
       if (data.success) {
         setStudents(data.data);

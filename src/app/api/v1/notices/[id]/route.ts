@@ -39,7 +39,17 @@ export async function GET(req: NextRequest, context: RouteContext) {
       }
     }
 
-    return apiSuccess(notice);
+    let parsedRoles: string[] = [];
+    try {
+      parsedRoles = JSON.parse(notice.targetRoles);
+    } catch {
+      parsedRoles = [];
+    }
+
+    return apiSuccess({
+      ...notice,
+      targetRoles: parsedRoles,
+    });
   } catch (error) {
     console.error("Get notice error:", error);
     return apiError("INTERNAL_ERROR", "Failed to get notice", 500);
@@ -91,7 +101,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const updateData: Record<string, any> = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.content !== undefined) updateData.content = data.content;
-    if (data.targetRoles !== undefined) updateData.targetRoles = data.targetRoles;
+    if (data.targetRoles !== undefined) {
+      updateData.targetRoles = JSON.stringify(data.targetRoles);
+    }
     if (data.branchId !== undefined) updateData.branchId = data.branchId || null;
     if (data.expiresAt !== undefined) {
       updateData.expiresAt = data.expiresAt ? new Date(data.expiresAt) : null;
@@ -133,7 +145,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       details: { title: updated.title, isPublished: updated.isPublished },
     });
 
-    return apiSuccess(updated);
+    let parsedRoles: string[] = [];
+    try {
+      parsedRoles = JSON.parse(updated.targetRoles);
+    } catch {
+      parsedRoles = [];
+    }
+
+    return apiSuccess({
+      ...updated,
+      targetRoles: parsedRoles,
+    });
   } catch (error) {
     console.error("Update notice error:", error);
     return apiError("INTERNAL_ERROR", "Failed to update notice", 500);

@@ -22,9 +22,7 @@ export async function GET(req: NextRequest) {
 
   const ctx = getTenantContext(req);
   const url = new URL(req.url);
-  const { page, limit: parsedLimit, search } = parsePagination(url);
-  const limitParam = url.searchParams.get("limit");
-  const limit = limitParam === "9999" ? 10000 : parsedLimit;
+  const { page, limit, search } = parsePagination(url);
   const branchId = url.searchParams.get("branchId");
 
   const where: Record<string, unknown> = {
@@ -230,7 +228,7 @@ export async function POST(req: NextRequest) {
     // Verify class exists and belongs to this branch/organization (if provided)
     if (data.classId) {
       const cls = await prisma.class.findFirst({
-        where: { id: data.classId, branchId: data.branchId },
+        where: { id: data.classId, branchId: data.branchId, status: "ACTIVE" },
       });
       if (!cls) {
         return apiError("NOT_FOUND", "Class not found for this branch", 404);

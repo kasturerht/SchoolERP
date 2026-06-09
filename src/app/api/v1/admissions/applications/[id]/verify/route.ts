@@ -51,6 +51,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       // Update individual documents if provided
       if (documents && documents.length > 0) {
         for (const doc of documents) {
+          if (doc.id.startsWith("mock-")) continue;
           await tx.applicationDocument.update({
             where: { id: doc.id, applicationId: id },
             data: {

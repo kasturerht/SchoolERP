@@ -48,7 +48,19 @@ export function apiForbidden() {
  */
 export function parsePagination(url: URL) {
   const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1"));
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "20")));
+  const limitParam = url.searchParams.get("limit");
+  
+  let limit = 20; // Default limit
+  if (limitParam) {
+    const parsedLimit = parseInt(limitParam);
+    if (!isNaN(parsedLimit)) {
+      // Allow higher limits (up to 10000) when explicitly requested by client 
+      // to avoid silent truncation in list views/grids.
+      limit = Math.min(10000, Math.max(1, parsedLimit));
+    }
+  }
+  
   const search = url.searchParams.get("search") ?? undefined;
   return { page, limit, search };
 }
+

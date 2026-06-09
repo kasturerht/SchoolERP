@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -18,6 +18,7 @@ import {
 
 interface PaymentFormProps {
   pendingAmount: number;
+  invoiceId?: string;
   onSubmit: (data: CreateFeePaymentInput) => Promise<void>;
   submitting: boolean;
 }
@@ -29,10 +30,21 @@ const METHODS_WITH_TXN_ID = new Set(["UPI", "ONLINE", "BANK_TRANSFER"]);
 
 export function PaymentForm({
   pendingAmount,
+  invoiceId,
   onSubmit,
   submitting,
 }: PaymentFormProps) {
   const [amount, setAmount] = useState("");
+  
+  // Pre-fill amount when pendingAmount or invoiceId changes
+  useEffect(() => {
+    if (pendingAmount > 0) {
+      setAmount(pendingAmount.toString());
+    } else {
+      setAmount("");
+    }
+  }, [pendingAmount, invoiceId]);
+
   const [paidAt, setPaidAt] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -54,6 +66,7 @@ export function PaymentForm({
       paidAt,
       transactionId,
       remarks,
+      invoiceId,
     };
 
     const parsed = createFeePaymentSchema.safeParse(formData);

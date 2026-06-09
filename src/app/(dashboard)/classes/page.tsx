@@ -45,6 +45,7 @@ interface ClassRow {
   id: string;
   name: string;
   numericGrade: number;
+  status: "DRAFT" | "ACTIVE";
   branch: { id: string; name: string };
   academicYear: { id: string; name: string };
   sections: SectionSummary[];
@@ -128,6 +129,24 @@ export default function ClassesPage() {
       key: "academicYear",
       header: "Academic Year",
       render: (row) => row.academicYear.name,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => {
+        const isDraft = row.status === "DRAFT";
+        return (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+              isDraft
+                ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
+            }`}
+          >
+            {isDraft ? "Draft" : "Active"}
+          </span>
+        );
+      },
     },
     {
       key: "subjects",

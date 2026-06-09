@@ -22,6 +22,7 @@ export const createFeePaymentSchema = z.object({
   paidAt: z.string().min(1, "Payment date is required"),
   transactionId: z.string().max(100).optional().or(z.literal("")),
   remarks: z.string().max(500).optional().or(z.literal("")),
+  invoiceId: z.string().optional(),
 });
 
 export type CreateFeePaymentInput = z.infer<typeof createFeePaymentSchema>;

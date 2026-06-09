@@ -32,6 +32,9 @@ const classIncludes = {
           staff: { select: { id: true, name: true } },
         },
       },
+      _count: {
+        select: { studentEnrollments: true },
+      },
     },
   },
   feeStructures: {
@@ -114,7 +117,58 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (!existing) return apiNotFound("Class");
 
-    const { name, numericGrade, subjects, sections, fees, installments } = parsed.data;
+    const { name, numericGrade, subjects, sections, fees, installments, status } = parsed.data;
+
+    if (existing.status === "ACTIVE" && status === "DRAFT") {
+      return apiError("BAD_REQUEST", "Active class cannot be set back to draft mode", 400);
+    }
+
+    const enrollmentCount = await prisma.studentEnrollment.count({
+      where: { section: { classId: id } },
+    });
+
+    if (enrollmentCount > 0) {
+      if (numericGrade !== undefined && numericGrade !== existing.numericGrade) {
+        return apiError("CONFLICT", "Cannot modify numeric grade when students are enrolled", 409);
+      }
+      if (name !== undefined && name !== existing.name) {
+        return apiError("CONFLICT", "Cannot rename class when students are enrolled", 409);
+      }
+      if (sections !== undefined) {
+        const existingIds = existing.sections.map(s => s.id);
+        const incomingIds = sections.map(s => s.id).filter(Boolean);
+        const deletedIds = existingIds.filter(eid => !incomingIds.includes(eid));
+        if (deletedIds.length > 0) {
+          return apiError("CONFLICT", "Cannot delete divisions when students are enrolled", 409);
+        }
+        for (const sec of sections) {
+          if (sec.id) {
+            const existSec = existing.sections.find(s => s.id === sec.id);
+            if (existSec && existSec.name !== sec.name) {
+              return apiError("CONFLICT", "Cannot rename divisions when students are enrolled", 409);
+            }
+          }
+        }
+      }
+      if (fees !== undefined) {
+        if (fees.length !== existing.feeStructures.length) {
+          return apiError("CONFLICT", "Cannot modify fee structures when students are enrolled", 409);
+        }
+        for (const fee of fees) {
+          if (fee.id) {
+            const existFee = existing.feeStructures.find(f => f.id === fee.id);
+            if (!existFee || Number(existFee.amount) !== Number(fee.amount) || existFee.feeCategory.name !== fee.name) {
+              return apiError("CONFLICT", "Cannot modify fee structures when students are enrolled", 409);
+            }
+          } else {
+            return apiError("CONFLICT", "Cannot add new fee structures when students are enrolled", 409);
+          }
+        }
+      }
+      if (installments !== undefined) {
+        return apiError("CONFLICT", "Cannot modify installment plans when students are enrolled", 409);
+      }
+    }
 
     // Enforce sum match for each term type individually if provided or updated
     if (fees !== undefined || installments !== undefined) {
@@ -179,6 +233,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       const data: Record<string, unknown> = {};
       if (name !== undefined) data.name = name;
       if (numericGrade !== undefined) data.numericGrade = numericGrade;
+      if (status !== undefined) data.status = status;
 
       if (Object.keys(data).length > 0) {
         await tx.class.update({ where: { id }, data });

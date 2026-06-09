@@ -37,7 +37,13 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
           academicYearId: academicYear.id,
           name: "Class 1",
           numericGrade: 1,
+          status: "ACTIVE",
         },
+      });
+    } else if (classRecord.status !== "ACTIVE") {
+      classRecord = await prisma.class.update({
+        where: { id: classRecord.id },
+        data: { status: "ACTIVE" },
       });
     }
 
@@ -75,7 +81,13 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
           academicYearId: targetYear.id,
           name: "Class 2",
           numericGrade: 2,
+          status: "ACTIVE",
         },
+      });
+    } else if (targetClass.status !== "ACTIVE") {
+      targetClass = await prisma.class.update({
+        where: { id: targetClass.id },
+        data: { status: "ACTIVE" },
       });
     }
 

@@ -68,3 +68,9 @@ yarn-error.log*
 .env.production
 next-env.d.ts
 package-lock.json
+
+# Local scratch and test results
+tests/tmp/
+scratch/
+get_admins.js
+test-perms.js

@@ -142,6 +142,13 @@ async function globalSetup(config: FullConfig) {
   const studentClass = await prisma.class.findFirst({ where: { branchId: branch.id } }) || await prisma.class.findFirst();
   if (!studentClass) throw new Error("No class found in database");
 
+  if (studentClass.status !== "ACTIVE") {
+    await prisma.class.update({
+      where: { id: studentClass.id },
+      data: { status: "ACTIVE" },
+    });
+  }
+
   const studentSection = await prisma.section.findFirst({ where: { classId: studentClass.id } }) || await prisma.section.findFirst();
   if (!studentSection) throw new Error("No section found in database");
 

@@ -11,6 +11,7 @@ interface ClassData {
   id: string;
   name: string;
   numericGrade: number;
+  status: "DRAFT" | "ACTIVE";
   branchId: string;
   academicYearId: string;
   subjects: Array<{
@@ -29,12 +30,14 @@ interface ClassData {
       subject: { id: string; name: string; code: string };
       staff: { id: string; name: string };
     }>;
+    _count?: { studentEnrollments: number };
   }>;
   feeStructures: Array<{
     id: string;
     amount: number | string;
     frequency: string;
     feeCategory: { name: string };
+    termType?: string;
   }>;
   feeInstallmentTemplates?: Array<{
     id: string;
