@@ -33,7 +33,15 @@ const classIncludes = {
         },
       },
       _count: {
-        select: { studentEnrollments: true },
+        select: {
+          studentEnrollments: {
+            where: {
+              student: {
+                status: "ACTIVE" as any
+              }
+            }
+          }
+        },
       },
     },
   },

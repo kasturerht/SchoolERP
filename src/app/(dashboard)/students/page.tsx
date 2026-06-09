@@ -350,7 +350,7 @@ export default function StudentsPage() {
           <div>
             <div className="text-body-sm text-on-surface-variant font-semibold">Inactive / Dropped</div>
             <div className="text-headline-md font-black text-on-surface">
-              {students.filter((s) => ["DROPPED", "SUSPENDED"].includes(s.status)).length}
+              {students.filter((s) => ["DROPPED", "SUSPENDED", "TRANSFERRED"].includes(s.status)).length}
             </div>
           </div>
         </div>

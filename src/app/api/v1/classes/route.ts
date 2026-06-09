@@ -50,7 +50,17 @@ export async function GET(req: NextRequest) {
               id: true,
               name: true,
               classTeacher: { select: { id: true, name: true } },
-              _count: { select: { studentEnrollments: true } },
+              _count: {
+                select: {
+                  studentEnrollments: {
+                    where: {
+                      student: {
+                        status: "ACTIVE"
+                      }
+                    }
+                  }
+                }
+              },
             },
             orderBy: { name: "asc" },
           },
