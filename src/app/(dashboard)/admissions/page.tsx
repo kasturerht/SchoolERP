@@ -1309,22 +1309,7 @@ export default function AdmissionsPage() {
       {/* 3. Filtering Desk Panel */}
       <div className="flex flex-col space-y-4 p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/60 shadow-elevation-1 shrink-0 md:flex-row md:items-end md:space-y-0 md:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4 flex-1">
-          {/* Branch filter (superadmin scope) */}
-          <div className="w-52 shrink-0">
-            <label className="block text-label-sm text-on-surface-variant mb-1 font-medium">Branch Scope</label>
-            <Select value={branchFilter} onValueChange={setBranchFilter} disabled={!isSuperAdmin}>
-              <SelectTrigger fullWidth>
-                <SelectValue placeholder="Select Branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name} ({b.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+
 
           {/* Grade filter */}
           {activeTab === "applications" && (

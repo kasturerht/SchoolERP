@@ -15,7 +15,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
     if (!branch) throw new Error("No branch found");
 
     // Get or create Academic Year
-    let academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, isCurrent: true } });
+    let academicYear = await prisma.academicYear.findFirst({ where: { organizationId: org.id, name: "2026-27" } });
     if (!academicYear) {
       academicYear = await prisma.academicYear.create({
         data: {
@@ -25,6 +25,11 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
           endDate: new Date("2027-04-30"),
           isCurrent: true,
         },
+      });
+    } else if (!academicYear.isCurrent) {
+      academicYear = await prisma.academicYear.update({
+        where: { id: academicYear.id },
+        data: { isCurrent: true },
       });
     }
 

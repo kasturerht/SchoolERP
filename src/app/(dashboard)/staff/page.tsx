@@ -94,6 +94,15 @@ export default function StaffPage() {
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [branchFilter, setBranchFilter] = useState("ALL");
 
+  // Sync local branch filter with the global session branch
+  useEffect(() => {
+    if (session?.user?.branchId) {
+      setBranchFilter(session.user.branchId);
+    } else if (session?.user && !session.user.branchId) {
+      setBranchFilter("ALL");
+    }
+  }, [session?.user?.branchId, session?.user]);
+
   const fetchStaff = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
@@ -303,24 +312,6 @@ export default function StaffPage() {
                 ))}
               </SelectContent>
             </Select>
-            {isSuperAdmin && branches.length > 1 && (
-              <Select
-                value={branchFilter}
-                onValueChange={setBranchFilter}
-              >
-                <SelectTrigger className="min-w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Branches</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           </div>
           <PermissionGate module="staff" action="create">
             <Button

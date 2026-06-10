@@ -27,9 +27,9 @@ export async function GET(req: NextRequest) {
   };
 
   // Enforce branch scope isolation for non-global roles
-  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+  if (ctx.branchId && branchId !== "__all__") {
     where.branchId = ctx.branchId;
-  } else if (branchId && branchId !== "ALL") {
+  } else if (branchId && branchId !== "ALL" && branchId !== "__all__") {
     where.branchId = branchId;
   }
 

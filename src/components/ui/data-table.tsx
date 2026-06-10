@@ -174,15 +174,16 @@ export function DataTable<T>({
       }
       case "currency": {
         const config = col.currencyConfig;
-        if (!config) return "—";
-        const val = config.value(row);
-        const formatted = `₹${val.toLocaleString("en-IN")}`;
+        const val = config ? config.value(row) : (row as any)[col.key] ?? 0;
+        const formatted = `₹${Number(val).toLocaleString("en-IN")}`;
 
         let variant = "default";
-        if (typeof config.colorVariant === "function") {
-          variant = config.colorVariant(val);
-        } else if (config.colorVariant) {
-          variant = config.colorVariant;
+        if (config) {
+          if (typeof config.colorVariant === "function") {
+            variant = config.colorVariant(val);
+          } else if (config.colorVariant) {
+            variant = config.colorVariant;
+          }
         }
 
         const colorClasses = {

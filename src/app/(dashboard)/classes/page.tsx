@@ -52,6 +52,7 @@ interface ClassRow {
   totalStudents: number;
   feeStructures: Array<{
     amount: number | string;
+    termType?: "FULL_TERM" | "HALF_TERM" | "SHORT_TERM";
     feeCategory: { name: string };
   }>;
   _count: { sections: number; subjects: number };
@@ -71,6 +72,15 @@ export default function ClassesPage() {
   const [branchFilter, setBranchFilter] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  // Sync local branch filter with the global session branch
+  useEffect(() => {
+    if (session?.user?.branchId) {
+      setBranchFilter(session.user.branchId);
+    } else if (session?.user && !session.user.branchId) {
+      setBranchFilter("__all__");
+    }
+  }, [session?.user?.branchId, session?.user]);
+
   const fetchClasses = useCallback(async () => {
     setLoading(true);
     try {
@@ -89,8 +99,10 @@ export default function ClassesPage() {
   }, [branchFilter]);
 
   useEffect(() => {
-    fetchClasses();
-  }, [fetchClasses]);
+    if (branchFilter !== "") {
+      fetchClasses();
+    }
+  }, [branchFilter, fetchClasses]);
 
   async function handleDelete(id: string) {
     setDeleting(true);
@@ -119,11 +131,6 @@ export default function ClassesPage() {
       key: "numericGrade",
       header: "Grade",
       render: (row) => row.numericGrade,
-    },
-    {
-      key: "branch",
-      header: "Branch",
-      render: (row) => row.branch.name,
     },
     {
       key: "academicYear",
@@ -177,13 +184,65 @@ export default function ClassesPage() {
     {
       key: "fees",
       header: "Fees",
-      type: "currency",
-      currencyConfig: {
-        value: (row) =>
-          row.feeStructures.reduce(
-            (sum, f) => sum + Number(f.amount),
-            0
-          ),
+      render: (row) => {
+        const termTotals: Record<string, number> = {};
+        for (const f of row.feeStructures) {
+          const t = f.termType || "FULL_TERM";
+          termTotals[t] = (termTotals[t] || 0) + Number(f.amount);
+        }
+
+        const termOrder: Record<string, number> = {
+          FULL_TERM: 1,
+          HALF_TERM: 2,
+          SHORT_TERM: 3,
+        };
+
+        const terms = Object.entries(termTotals).sort((a, b) => {
+          return (termOrder[a[0]] || 99) - (termOrder[b[0]] || 99);
+        });
+
+        const termLabels: Record<string, string> = {
+          FULL_TERM: "Full",
+          HALF_TERM: "Half",
+          SHORT_TERM: "Short",
+        };
+
+        if (terms.length === 0) {
+          return (
+            <span className="inline-flex items-center rounded-md bg-slate-50 dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 ring-1 ring-inset ring-slate-600/10 dark:ring-slate-400/20">
+              ₹0
+            </span>
+          );
+        }
+
+        const tooltipText = terms
+          .map(([termType, amount]) => {
+            const label = termLabels[termType] || termType;
+            return `${label}: ₹${amount.toLocaleString("en-IN")}`;
+          })
+          .join("\n");
+
+        const [primaryTermType, primaryAmount] = terms[0];
+        const primaryLabel = termLabels[primaryTermType] || primaryTermType;
+
+        return (
+          <div className="flex items-center gap-1.5" title={tooltipText}>
+            <span className="inline-flex items-center rounded-md bg-slate-50 dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 ring-1 ring-inset ring-slate-600/10 dark:ring-slate-400/20 whitespace-nowrap">
+              <span className="text-[9px] text-slate-400 dark:text-slate-500 mr-1 uppercase font-bold tracking-wider">
+                {primaryLabel}
+              </span>
+              ₹{primaryAmount.toLocaleString("en-IN")}
+            </span>
+            {terms.length > 1 && (
+              <span 
+                className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-1 text-[10px] font-black text-primary ring-1 ring-inset ring-primary/20 cursor-help whitespace-nowrap"
+                title={tooltipText}
+              >
+                +{terms.length - 1}
+              </span>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -271,30 +330,6 @@ export default function ClassesPage() {
               placeholder="Search classes"
               className="sm:max-w-xs"
             />
-            {isSuperAdmin && (
-              <div className="w-48">
-                <Select
-                  value={branchFilter}
-                  onValueChange={setBranchFilter}
-                >
-                  <SelectTrigger fullWidth>
-                    <SelectValue
-                      placeholder={
-                        branchesLoading ? "Loading..." : "All branches"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All branches</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
           <PermissionGate module="classes" action="create">
             <Button

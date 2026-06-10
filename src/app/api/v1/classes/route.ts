@@ -28,9 +28,9 @@ export async function GET(req: NextRequest) {
         branch: { organizationId: ctx.organizationId },
       };
       
-      if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+      if (ctx.branchId && branchId !== "__all__") {
         where.branchId = ctx.branchId;
-      } else if (branchId) {
+      } else if (branchId && branchId !== "__all__") {
         where.branchId = branchId;
       }
 
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
           feeStructures: {
             select: {
               amount: true,
+              termType: true,
               feeCategory: { select: { name: true } },
             },
           },
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest) {
   const branchId = url.searchParams.get("branchId");
   
   let targetBranchId = branchId;
-  if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId) {
+  if (ctx.branchId && branchId !== "__all__") {
     targetBranchId = ctx.branchId;
   }
 

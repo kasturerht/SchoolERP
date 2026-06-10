@@ -59,7 +59,10 @@ import {
   Megaphone,
   PartyPopper,
   BarChart3,
-  X
+  X,
+  AlertTriangle,
+  Printer,
+  Copy
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -140,6 +143,10 @@ const iconMap: Record<string, LucideIcon> = {
   celebration: PartyPopper,
   analytics: BarChart3,
   close: X,
+  warning: AlertTriangle,
+  print: Printer,
+  copy: Copy,
+  content_copy: Copy,
 };
 
 export function Icon({

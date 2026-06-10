@@ -14,18 +14,23 @@ export const SelectValue = SelectPrimitive.Value;
 
 export const SelectTrigger = forwardRef<
   HTMLButtonElement,
-  SelectPrimitive.SelectTriggerProps & { fullWidth?: boolean }
->(({ className, children, fullWidth, ...props }, ref) => (
+  SelectPrimitive.SelectTriggerProps & { fullWidth?: boolean; variant?: "default" | "unstyled" }
+>(({ className, children, fullWidth, variant = "default", ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
+      variant === "default" && [
+        "h-11 rounded-xl px-4 cursor-pointer",
+        "border-2 border-slate-200 bg-white text-slate-700 text-sm font-medium transition-all duration-300",
+        "hover:border-primary/50 hover:bg-slate-50",
+        "focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary",
+        "data-[placeholder]:text-slate-400",
+        "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50",
+      ],
+      variant === "unstyled" && [
+        "bg-transparent border-none outline-none shadow-none ring-0 w-full h-full cursor-pointer focus:ring-0 focus:outline-none",
+      ],
       "inline-flex items-center justify-between gap-2",
-      "h-11 rounded-xl px-4 cursor-pointer",
-      "border-2 border-slate-200 bg-white text-slate-700 text-sm font-medium transition-all duration-300",
-      "hover:border-primary/50 hover:bg-slate-50",
-      "focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary",
-      "data-[placeholder]:text-slate-400",
-      "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50",
       fullWidth && "w-full",
       className
     )}

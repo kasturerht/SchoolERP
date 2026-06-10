@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectTrigger,
@@ -95,129 +94,157 @@ export function PaymentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Amount */}
-      <div>
+      <div className="space-y-1.5">
         <label
           htmlFor="amount"
-          className="block text-label-lg text-on-surface-variant mb-1"
+          className="block text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider px-1"
         >
           Amount
         </label>
-        <input
-          id="amount"
-          type="number"
-          step="0.01"
-          min="0"
-          max={pendingAmount}
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="w-full rounded-xs border border-outline bg-transparent px-3 py-2 text-body-lg text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          placeholder="Enter amount"
-        />
+        <div className="relative">
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
+            ₹
+          </span>
+          <input
+            id="amount"
+            type="number"
+            step="0.01"
+            min="0"
+            max={pendingAmount}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded-xl border border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 focus:bg-white dark:focus:bg-slate-900 pl-8.5 pr-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/5 dark:focus:ring-white/5 transition-all duration-250 font-bold"
+            placeholder="0.00"
+          />
+        </div>
         {errors.amount && (
-          <p className="text-error text-body-sm mt-1">{errors.amount}</p>
+          <p className="text-rose-600 text-[11px] mt-1 font-semibold px-1">{errors.amount}</p>
         )}
         {numericAmount > 0 && numericAmount <= pendingAmount && (
-          <p className="text-body-sm text-on-surface-variant mt-1">
+          <p className="text-[11px] text-slate-450 mt-1 px-1 font-semibold">
             Remaining after payment:{" "}
-            <span className={remainingAfter > 0 ? "text-error font-medium" : "text-success font-medium"}>
+            <span className={remainingAfter > 0 ? "text-rose-500" : "text-emerald-600"}>
               {formatCurrency(remainingAfter)}
             </span>
           </p>
         )}
       </div>
 
-      {/* Payment Date */}
-      <div>
-        <label
-          htmlFor="paidAt"
-          className="block text-label-lg text-on-surface-variant mb-1"
-        >
-          Payment Date
-        </label>
-        <input
-          id="paidAt"
-          type="date"
-          value={paidAt}
-          onChange={(e) => setPaidAt(e.target.value)}
-          className="w-full rounded-xs border border-outline bg-transparent px-3 py-2 text-body-lg text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-        />
-        {errors.paidAt && (
-          <p className="text-error text-body-sm mt-1">{errors.paidAt}</p>
-        )}
-      </div>
+      {/* Date & Method (2-Column Grid) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* Payment Date */}
+        <div className="space-y-1.5">
+          <label
+            htmlFor="paidAt"
+            className="block text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-wider px-1"
+          >
+            Payment Date
+          </label>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">
+              calendar_today
+            </span>
+            <input
+              id="paidAt"
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              className="w-full rounded-xl border border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/40 focus:bg-white dark:focus:bg-slate-900 pl-9.5 pr-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/5 dark:focus:ring-white/5 transition-all duration-250 font-semibold cursor-pointer"
+            />
+          </div>
+          {errors.paidAt && (
+            <p className="text-rose-600 text-[11px] mt-1 font-semibold px-1">{errors.paidAt}</p>
+          )}
+        </div>
 
-      {/* Payment Method */}
-      <div>
-        <label className="block text-label-lg text-on-surface-variant mb-1">
-          Payment Method
-        </label>
-        <Select value={method} onValueChange={setMethod}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select method" />
-          </SelectTrigger>
-          <SelectContent>
-            {PAYMENT_METHODS.map((m) => (
-              <SelectItem key={m} value={m}>
-                {PAYMENT_METHOD_LABELS[m]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {errors.method && (
-          <p className="text-error text-body-sm mt-1">{errors.method}</p>
-        )}
+        {/* Payment Method */}
+        <div className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-wider px-1">
+            Payment Method
+          </label>
+          <Select value={method} onValueChange={setMethod}>
+            <SelectTrigger className="w-full rounded-xl border border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-slate-900/5 dark:focus:ring-white/5 focus:border-slate-900 dark:focus:border-slate-100 py-2.5 text-sm font-semibold h-[42px] transition-all duration-250">
+              <SelectValue placeholder="Select method" />
+            </SelectTrigger>
+            <SelectContent>
+              {PAYMENT_METHODS.map((m) => (
+                <SelectItem key={m} value={m} className="cursor-pointer font-semibold">
+                  {PAYMENT_METHOD_LABELS[m]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.method && (
+            <p className="text-rose-600 text-[11px] mt-1 font-semibold px-1">{errors.method}</p>
+          )}
+        </div>
       </div>
 
       {/* Transaction ID — shown for UPI, Online, Bank Transfer */}
       {METHODS_WITH_TXN_ID.has(method) && (
-        <div>
+        <div className="space-y-1.5 animate-fadeIn">
           <label
             htmlFor="transactionId"
-            className="block text-label-lg text-on-surface-variant mb-1"
+            className="block text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider px-1"
           >
             Transaction ID
           </label>
-          <input
-            id="transactionId"
-            type="text"
-            value={transactionId}
-            onChange={(e) => setTransactionId(e.target.value)}
-            className="w-full rounded-xs border border-outline bg-transparent px-3 py-2 text-body-lg text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            placeholder="Enter transaction ID"
-            maxLength={100}
-          />
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">
+              key
+            </span>
+            <input
+              id="transactionId"
+              type="text"
+              value={transactionId}
+              onChange={(e) => setTransactionId(e.target.value)}
+              className="w-full rounded-xl border border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 focus:bg-white dark:focus:bg-slate-900 pl-9.5 pr-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/5 dark:focus:ring-white/5 transition-all duration-250 font-mono"
+              placeholder="Enter transaction ID"
+              maxLength={100}
+            />
+          </div>
         </div>
       )}
 
       {/* Remarks */}
-      <div>
+      <div className="space-y-1.5">
         <label
           htmlFor="remarks"
-          className="block text-label-lg text-on-surface-variant mb-1"
+          className="block text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider px-1"
         >
           Remarks
         </label>
-        <input
-          id="remarks"
-          type="text"
-          value={remarks}
-          onChange={(e) => setRemarks(e.target.value)}
-          className="w-full rounded-xs border border-outline bg-transparent px-3 py-2 text-body-lg text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          placeholder="Optional remarks"
-          maxLength={500}
-        />
+        <div className="relative">
+          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">
+            notes
+          </span>
+          <input
+            id="remarks"
+            type="text"
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            className="w-full rounded-xl border border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/40 focus:bg-white dark:focus:bg-slate-900 pl-9.5 pr-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/5 dark:focus:ring-white/5 transition-all duration-250 font-medium"
+            placeholder="Optional remarks"
+            maxLength={500}
+          />
+        </div>
       </div>
 
-      <div className="pt-2">
-        <Button
+      <div className="pt-3">
+        <button
           type="submit"
-          variant="filled"
-          icon="payments"
-          loading={submitting}
           disabled={submitting}
+          className="w-full flex items-center justify-center gap-2 bg-slate-900 dark:bg-slate-105 hover:bg-black dark:hover:bg-white text-white dark:text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-md transition-all duration-300 active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none text-sm cursor-pointer"
         >
-          Record Payment
-        </Button>
+          {submitting ? (
+            <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+          ) : (
+            <span className="material-symbols-outlined text-sm">payments</span>
+          )}
+          {numericAmount > 0 && numericAmount <= pendingAmount
+            ? `Record Payment • ${formatCurrency(numericAmount)}`
+            : "Record Payment"}
+        </button>
       </div>
     </form>
   );

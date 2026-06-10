@@ -90,6 +90,15 @@ export default function StudentsPage() {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [showFilters, setShowFilters] = useState(false);
 
+  // Sync local branch filter with the global session branch
+  useEffect(() => {
+    if (session?.user?.branchId) {
+      setBranchFilter(session.user.branchId);
+    } else if (session?.user && !session.user.branchId) {
+      setBranchFilter("ALL");
+    }
+  }, [session?.user?.branchId, session?.user]);
+
   // Derive active branch ID
   const activeBranchId = branchFilter !== "ALL" 
     ? branchFilter 
@@ -366,25 +375,6 @@ export default function StudentsPage() {
               placeholder="Search students"
               className="sm:max-w-xs"
             />
-            {isSuperAdmin && branches.length > 1 && (
-              <Select
-                value={branchFilter}
-                onValueChange={setBranchFilter}
-              >
-                <SelectTrigger className="min-w-[160px] bg-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Branches</SelectItem>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
             <Button
               variant="outlined"
               icon="tune"

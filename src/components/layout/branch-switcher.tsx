@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import * as Select from "@radix-ui/react-select";
@@ -11,9 +12,27 @@ export function BranchSwitcher() {
   const router = useRouter();
   const { data: session, update } = useSession();
   const { branches, isLoading } = useBranches();
+  const hasAutoSelected = useRef(false);
 
   const role = session?.user?.roleName;
   const currentBranchId = session?.user?.branchId ?? "";
+
+  useEffect(() => {
+    if (isLoading || branches.length === 0) return;
+    if (!session?.user) return;
+
+    const isGlobalAdmin = role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
+    if (isGlobalAdmin && !session.user.branchId && !hasAutoSelected.current) {
+      hasAutoSelected.current = true;
+      const defaultBranch = branches[0];
+      update({
+        branchId: defaultBranch.id,
+        branchName: defaultBranch.name,
+      }).then(() => {
+        router.refresh();
+      });
+    }
+  }, [branches, isLoading, session, role, update, router]);
 
   // Only SCHOOL_ADMIN (and SUPER_ADMIN) can switch branches
   if (isLoading || branches.length <= 1 || role === "BRANCH_ADMIN") return null;

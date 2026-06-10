@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface UsePermissionsReturn {
   can: (module: string, action: string) => boolean;
@@ -35,10 +35,11 @@ export function usePermissions(): UsePermissionsReturn {
       .finally(() => setIsLoading(false));
   }, [session, status]);
 
-  const can = (module: string, action: string): boolean => {
+  const can = useCallback((module: string, action: string): boolean => {
     if (session?.user?.roleName === "SUPER_ADMIN" || session?.user?.roleName === "SCHOOL_ADMIN") return true;
     return permissions.has(`${module}:${action}`);
-  };
+  }, [session, permissions]);
 
   return { can, permissions, isLoading };
 }
+

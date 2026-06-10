@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { SelectField } from "@/components/ui/select-field";
 import {
   Select,
   SelectTrigger,
@@ -766,70 +767,35 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                 className={`grid grid-cols-1 gap-4 ${isSuperAdmin ? "sm:grid-cols-2" : ""}`}
               >
                 {isSuperAdmin && (
-                  <div className="flex flex-col gap-1">
-                    <label className="text-label-md text-on-surface-variant px-1">
-                      Branch *
-                    </label>
-                    <Select
-                      value={branchId}
-                      onValueChange={setBranchId}
-                      disabled={hasEnrolledStudents || formMode === "edit"}
-                    >
-                      <SelectTrigger fullWidth>
-                        <SelectValue
-                          placeholder={
-                            branchesLoading ? "Loading..." : "Select branch"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.branchId && (
-                      <p className="px-4 text-[12px] leading-4 text-error">
-                        {errors.branchId}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className="flex flex-col gap-1">
-                  <label className="text-label-md text-on-surface-variant px-1">
-                    Academic Year *
-                  </label>
-                  <Select
-                    value={academicYearId}
-                    onValueChange={setAcademicYearId}
+                  <SelectField
+                    label="Branch"
+                    value={branchId}
+                    onValueChange={setBranchId}
                     disabled={hasEnrolledStudents || formMode === "edit"}
-                  >
-                    <SelectTrigger fullWidth>
-                      <SelectValue
-                        placeholder={
-                          academicYearsLoading
-                            ? "Loading..."
-                            : "Select academic year"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {academicYears.map((y) => (
-                        <SelectItem key={y.id} value={y.id}>
-                          {y.name}
-                          {y.isCurrent ? " (Current)" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.academicYearId && (
-                    <p className="px-4 text-[12px] leading-4 text-error">
-                      {errors.academicYearId}
-                    </p>
-                  )}
-                </div>
+                    required
+                    fullWidth
+                    error={errors.branchId}
+                    placeholder={branchesLoading ? "Loading..." : "Select branch"}
+                    options={branches.map((b) => ({
+                      value: b.id,
+                      label: b.name,
+                    }))}
+                  />
+                )}
+                <SelectField
+                  label="Academic Year"
+                  value={academicYearId}
+                  onValueChange={setAcademicYearId}
+                  disabled={hasEnrolledStudents || formMode === "edit"}
+                  required
+                  fullWidth
+                  error={errors.academicYearId}
+                  placeholder={academicYearsLoading ? "Loading..." : "Select academic year"}
+                  options={academicYears.map((y) => ({
+                    value: y.id,
+                    label: `${y.name}${y.isCurrent ? " (Current)" : ""}`,
+                  }))}
+                />
               </div>
 
               <Divider />
@@ -1059,29 +1025,25 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
               <div className="space-y-6">
                 
                 {/* A. FEE STRUCTURE SECTION */}
-                <div className="bg-slate-50/10 border border-outline-variant/40 rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-label-lg font-bold text-on-surface">
-                        Fee Structure
-                      </h4>
-                      <p className="text-body-xs text-on-surface-variant">
-                        Define categories and annual fees for this term.
-                      </p>
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-sm border-t-4 border-t-blue-500 overflow-hidden">
+                  <div className="bg-slate-50/50 dark:bg-slate-900/40 px-5 py-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-xl">
+                        <Icon name="receipt_long" size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          Fee Structure
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Define categories and annual fees for this term.
+                        </p>
+                      </div>
                     </div>
-                    {!hasEnrolledStudents && (
-                      <Button
-                        type="button"
-                        variant="text"
-                        icon="add"
-                        onClick={() => addFee(activeTermTab)}
-                      >
-                        Add Fee Row
-                      </Button>
-                    )}
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="p-5 space-y-4">
+                    <div className="space-y-3">
                     {fees
                       .map((fee, index) => ({ fee, index }))
                       .filter(({ fee }) => fee.termType === activeTermTab)
@@ -1118,7 +1080,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                             <button
                               type="button"
                               onClick={() => removeFee(index)}
-                              className="rounded-full p-2 hover:bg-rose-50 text-rose-500 hover:text-rose-700 mt-1 cursor-pointer transition-colors"
+                              className="rounded-full p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:text-slate-500 dark:hover:text-rose-400 dark:hover:bg-rose-950/20 transition-all duration-200 cursor-pointer mt-1 flex items-center justify-center"
                             >
                               <Icon name="close" size={20} />
                             </button>
@@ -1131,58 +1093,73 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                         No fees added for this term yet. Click &ldquo;Add Fee Row&rdquo; to begin.
                       </p>
                     )}
-                  </div>
-                </div>
 
-                {/* B. INSTALLMENTS SECTION */}
-                <div className="bg-slate-50/10 border border-outline-variant/40 rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-label-lg font-bold text-on-surface">
-                        Installment Plan
-                      </h4>
-                      <p className="text-body-xs text-on-surface-variant">
-                        Divide the total fee of this term into installments.
-                      </p>
-                    </div>
                     {!hasEnrolledStudents && (
-                      <Button
-                        type="button"
-                        variant="text"
-                        icon="add"
-                        onClick={() => addInstallment(activeTermTab)}
-                      >
-                        Add Installment
-                      </Button>
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          type="button"
+                          variant="outlined"
+                          icon="add"
+                          onClick={() => addFee(activeTermTab)}
+                          className="hover:scale-[1.02] transition-all duration-200"
+                        >
+                          Add Fee Row
+                        </Button>
+                      </div>
                     )}
                   </div>
+                </div>
+              </div>
 
-                  <div className="space-y-4">
+                {/* B. INSTALLMENTS SECTION */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-sm border-t-4 border-t-primary overflow-hidden">
+                  <div className="bg-slate-50/50 dark:bg-slate-900/40 px-5 py-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 text-primary dark:bg-primary/20 rounded-xl">
+                        <Icon name="event" size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          Installment Plan
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Divide the total fee of this term into installments.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5 space-y-6">
+                    <div className="space-y-6">
                     {installments
                       .map((inst, index) => ({ inst, index }))
                       .filter(({ inst }) => inst.termType === activeTermTab)
                       .map(({ inst, index }, mappedIdx) => (
                         <div
                           key={index}
-                          className="rounded-xl border border-outline-variant/50 p-4 space-y-4 bg-slate-50/35 relative animate-fadeIn"
+                          className="relative p-6 space-y-6 bg-white dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 animate-fadeIn"
                         >
-                          <div className="flex justify-between items-center">
-                            <p className="text-label-sm font-bold text-primary">
-                              Installment #{mappedIdx + 1}
-                            </p>
+                          <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800/50">
+                            <div className="flex items-center gap-2">
+                              <span className="h-5 w-1.5 rounded-full bg-primary" />
+                              <p className="text-sm font-black text-slate-800 dark:text-slate-200">
+                                Installment #{mappedIdx + 1}
+                              </p>
+                            </div>
                             {!hasEnrolledStudents && (
                               <button
                                 type="button"
                                 onClick={() => removeInstallment(index)}
-                                className="rounded-full p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 cursor-pointer transition-colors"
+                                className="rounded-full p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:text-slate-500 dark:hover:text-rose-400 dark:hover:bg-rose-950/20 transition-all duration-200 cursor-pointer flex items-center justify-center"
                               >
                                 <Icon name="close" size={18} />
                               </button>
                             )}
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                             <TextField
+                              variant="compact"
                               label="Installment Name"
                               placeholder="e.g. Admission / Term 1"
                               value={inst.name}
@@ -1195,6 +1172,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                               fullWidth
                             />
                             <TextField
+                              variant="compact"
                               label="Amount (₹)"
                               type="number"
                               placeholder="e.g. 15000"
@@ -1208,6 +1186,7 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                               fullWidth
                             />
                             <TextField
+                              variant="compact"
                               label="Due Date"
                               type="date"
                               value={inst.dueDate}
@@ -1222,8 +1201,8 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                           </div>
 
                           {/* Late fee subform */}
-                          <div className="pt-2 border-t border-dashed border-outline-variant/40 space-y-3">
-                            <div className="flex items-center gap-2">
+                          <div className="pt-4 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
+                            <div className="flex items-center gap-2.5">
                               <input
                                 type="checkbox"
                                 id={`late-fee-active-${index}`}
@@ -1232,52 +1211,45 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                   updateInstallment(index, "lateFeeActive", e.target.checked)
                                 }
                                 disabled={hasEnrolledStudents}
-                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40"
+                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40 cursor-pointer"
                               />
                               <label
                                 htmlFor={`late-fee-active-${index}`}
-                                className="text-label-md font-medium text-on-surface cursor-pointer select-none"
+                                className="text-sm font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none"
                               >
                                 Apply Late Fees
                               </label>
                             </div>
 
                             {inst.lateFeeActive && (
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-label-md text-on-surface-variant px-1">
-                                    Late Fee Type *
-                                  </label>
-                                  <Select
-                                    value={inst.lateFeeType || "DAILY"}
-                                    onValueChange={(val) => {
-                                      updateInstallment(index, "lateFeeType", val);
-                                      if (val === "DAILY") {
-                                        updateInstallment(index, "lateFeePerDay", inst.lateFeeValue || 0);
-                                      } else {
-                                        updateInstallment(index, "lateFeePerDay", 0);
-                                      }
-                                    }}
-                                    disabled={hasEnrolledStudents}
-                                  >
-                                    <SelectTrigger fullWidth>
-                                      <SelectValue placeholder="Select Type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="DAILY">Daily Rate</SelectItem>
-                                      <SelectItem value="LUMP_SUM">One-time Lump-sum</SelectItem>
-                                      <SelectItem value="PERCENTAGE">Percentage of Installment</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                              <div className="p-4 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-900 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-5 animate-fadeIn">
+                                <SelectField
+                                  variant="compact"
+                                  label="Late Fee Type"
+                                  value={inst.lateFeeType || "DAILY"}
+                                  onValueChange={(val) => {
+                                    updateInstallment(index, "lateFeeType", val as any);
+                                    updateInstallment(index, "lateFeeValue", 0);
+                                    updateInstallment(index, "lateFeePerDay", 0);
+                                  }}
+                                  disabled={hasEnrolledStudents}
+                                  required
+                                  fullWidth
+                                  options={[
+                                    { value: "DAILY", label: "Daily Rate" },
+                                    { value: "LUMP_SUM", label: "One-time Lump-sum" },
+                                    { value: "PERCENTAGE", label: "Percentage of Installment" },
+                                  ]}
+                                />
 
                                 <TextField
+                                  variant="compact"
                                   label={
                                     inst.lateFeeType === "LUMP_SUM"
-                                      ? "Fixed Penalty (₹ lump-sum)"
+                                      ? "Fixed Penalty (₹)"
                                       : inst.lateFeeType === "PERCENTAGE"
-                                        ? "Penalty Rate (% of installment)"
-                                        : "Penalty Rate (₹ per day)"
+                                        ? "Penalty Rate (%)"
+                                        : "Penalty Rate (₹/day)"
                                   }
                                   type="number"
                                   placeholder={
@@ -1298,7 +1270,8 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                                 />
 
                                 <TextField
-                                  label="Grace Days (before penalty starts)"
+                                  variant="compact"
+                                  label="Grace Days"
                                   type="number"
                                   placeholder="e.g. 2"
                                   value={inst.lateFeeGrace.toString()}
@@ -1326,8 +1299,23 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                         </p>
                       </div>
                     )}
+
+                    {!hasEnrolledStudents && (
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          type="button"
+                          variant="outlined"
+                          icon="add"
+                          onClick={() => addInstallment(activeTermTab)}
+                          className="hover:scale-[1.02] transition-all duration-200"
+                        >
+                          Add Installment
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
+              </div>
 
                 {/* C. TERM TOTAL SUMMARY AND VERIFICATION CARD */}
                 {(() => {

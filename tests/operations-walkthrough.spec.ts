@@ -677,6 +677,9 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
           await clickOption(finPage, "UPI");
           await finPage.click("button[type='submit']:has-text('Record Payment')");
           await finPage.waitForSelector("text=recorded successfully");
+          // Dismiss the payment success dialog
+          await finPage.click("div[role='dialog'] button:has-text('Close')");
+          await finPage.waitForSelector("div[role='dialog']", { state: "detached" });
         }
 
         // Pay Installment 2
@@ -688,6 +691,9 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
           await clickOption(finPage, "Cash");
           await finPage.click("button[type='submit']:has-text('Record Payment')");
           await finPage.waitForSelector("text=recorded successfully");
+          // Dismiss the payment success dialog
+          await finPage.click("div[role='dialog'] button:has-text('Close')");
+          await finPage.waitForSelector("div[role='dialog']", { state: "detached" });
         }
         console.log(`Student ${i+1} paid fully (₹20,000) or already processed`);
       } else if (i < 8) {
@@ -700,6 +706,9 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
           await clickOption(finPage, "UPI");
           await finPage.click("button[type='submit']:has-text('Record Payment')");
           await finPage.waitForSelector("text=recorded successfully");
+          // Dismiss the payment success dialog
+          await finPage.click("div[role='dialog'] button:has-text('Close')");
+          await finPage.waitForSelector("div[role='dialog']", { state: "detached" });
         }
         console.log(`Student ${i+1} paid partially (₹10,000) or already processed`);
       } else {

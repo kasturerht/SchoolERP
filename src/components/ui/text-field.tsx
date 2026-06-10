@@ -5,13 +5,14 @@ import { cn } from "@/lib/utils";
 
 interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   label: string;
-  variant?: "outlined" | "filled";
+  variant?: "outlined" | "filled" | "compact";
   error?: string;
   helperText?: string;
   leadingIcon?: string;
   trailingIcon?: string;
   onTrailingIconClick?: () => void;
   fullWidth?: boolean;
+  labelBg?: string;
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
@@ -25,6 +26,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
       trailingIcon,
       onTrailingIconClick,
       fullWidth = false,
+      labelBg = "bg-surface",
       className,
       disabled,
       required,
@@ -101,7 +103,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
             <div className="relative flex-1 pt-2">
               <label
                 className={cn(
-                  "absolute left-4 transition-all duration-200 pointer-events-none",
+                  "absolute left-4 transition-all duration-200 pointer-events-none whitespace-nowrap truncate max-w-[calc(100%-32px)]",
                   labelColor,
                   isFloating
                     ? "top-1 text-[12px] leading-4"
@@ -147,11 +149,81 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         </div>
       );
     }
+    if (variant === "compact") {
+      return (
+        <div className={cn("flex flex-col gap-1.5", fullWidth && "w-full", className)}>
+          <span
+            className={cn(
+              "text-[11px] font-black tracking-wider uppercase text-slate-500 dark:text-slate-400 px-0.5 select-none",
+              disabled && "opacity-50"
+            )}
+          >
+            {label}
+            {required && <span className="text-error ml-0.5">*</span>}
+          </span>
+          <div
+            className={cn(
+              "relative flex items-center h-10 rounded-lg border bg-white dark:bg-slate-900 transition-all duration-200",
+              hasError
+                ? "border-error focus-within:ring-2 focus-within:ring-error/20 focus-within:border-error"
+                : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 focus-within:ring-4 focus-within:ring-primary/10 focus-within:border-primary",
+              disabled && "bg-slate-50 dark:bg-slate-950 opacity-50 cursor-not-allowed"
+            )}
+          >
+            {leadingIcon && (
+              <span className="material-symbols-outlined text-[18px] text-slate-400 ml-3 shrink-0">
+                {leadingIcon}
+              </span>
+            )}
+            <label className="sr-only">
+              {label}
+              {required && " *"}
+            </label>
+            <input
+              ref={ref}
+              value={value}
+              defaultValue={defaultValue}
+              disabled={disabled}
+              required={required}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              className={cn(
+                "w-full h-full bg-transparent px-3 text-sm text-slate-900 dark:text-slate-100 outline-none",
+                leadingIcon ? "pl-2" : "pl-3",
+                trailingIcon ? "pr-2" : "pr-3",
+                disabled && "cursor-not-allowed"
+              )}
+              {...props}
+            />
+            {trailingIcon && (
+              <button
+                type="button"
+                onClick={onTrailingIconClick}
+                tabIndex={-1}
+                className="material-symbols-outlined text-[18px] text-slate-400 mr-3 shrink-0 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                {trailingIcon}
+              </button>
+            )}
+          </div>
+          {(error || helperText) && (
+            <p
+              className={cn(
+                "mt-0.5 px-0.5 text-[11px] leading-4",
+                hasError ? "text-error" : "text-slate-400"
+              )}
+            >
+              {error || helperText}
+            </p>
+          )}
+        </div>
+      );
+    }
 
     // Outlined variant (default)
     return (
       <div className={cn("relative", fullWidth && "w-full", className)}>
-        <div className={cn("relative flex items-center h-[56px] rounded-[8px]", disabled && "opacity-38")}>
+        <div className={cn("relative flex items-center h-12 rounded-[8px]", disabled && "opacity-38")}>
           {/* Fieldset for the border notch */}
           <fieldset
             className={cn(
@@ -166,7 +238,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           >
             <legend
               className={cn(
-                "block float-none overflow-hidden invisible text-[12px] leading-none transition-all duration-200",
+                "block float-none overflow-hidden text-[12px] leading-none transition-all duration-200",
                 isFloating ? "max-w-full px-1.5 h-3" : "max-w-[0.01px] px-0 h-0"
               )}
             >
@@ -191,12 +263,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           <div className="relative flex-1 h-full flex items-center">
             <label
               className={cn(
-                "absolute transition-all duration-200 pointer-events-none z-10",
+                "absolute transition-all duration-200 pointer-events-none z-10 whitespace-nowrap truncate",
                 labelColor,
                 isFloating
-                  ? "top-[-9px] text-[12px] leading-4 left-1 px-1 bg-surface-container-lowest"
+                  ? cn("top-[-9px] text-[12px] leading-4 left-1 px-1 max-w-[calc(100%-12px)]", labelBg)
                   : cn(
-                      "top-1/2 -translate-y-1/2 text-[16px] leading-6",
+                      "top-1/2 -translate-y-1/2 text-[16px] leading-6 max-w-[calc(100%-24px)]",
                       leadingIcon ? "left-2" : "left-4"
                     )
               )}
