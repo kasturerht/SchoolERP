@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect } from "react";
 import { StudentProfile, SchoolNotice } from "../data/mockData";
 
-const BASE_URL = "http://localhost:3007/api/v1/parent";
+const BASE_URL = "https://schoolerp.skadas.com/api/v1/parent";
 
 export interface UserData {
   id: string;
