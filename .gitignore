@@ -73,4 +73,6 @@ package-lock.json
 tests/tmp/
 scratch/
 get_admins.js
-test-perms.js
+test-perms.js
+mobile/
+
