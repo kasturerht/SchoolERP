@@ -1,7 +1,10 @@
 import { StudentForm } from "@/components/student/student-form";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 
+import { redirect } from "next/navigation";
+
 export default function NewStudentPage() {
+  redirect("/admissions");
   return (
     <div>
       <Breadcrumb>

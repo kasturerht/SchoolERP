@@ -1393,6 +1393,12 @@ export default function AdmissionsPage() {
         setInquiryForm={setInquiryForm}
         onSubmit={handleCreateInquiry}
         loading={actionLoading}
+        branchId={branchFilter || ""}
+        academicYearId={activeAcademicYearId || ""}
+        onSuccess={() => {
+          fetchDashboardData();
+          setInquiryModalOpen(false);
+        }}
       />
 
       {/* Application Creation/Conversion Modal */}
@@ -1415,6 +1421,10 @@ export default function AdmissionsPage() {
         setFollowUpForm={setFollowUpForm}
         onSubmitFollowUp={handleCreateFollowUp}
         loading={actionLoading}
+        onSuccess={() => {
+          fetchDashboardData();
+          setInquiryWorkspaceOpen(false);
+        }}
       />
 
       {/* Unified Applicant Workspace Drawer */}

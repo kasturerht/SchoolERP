@@ -458,11 +458,11 @@ export function DashboardContent({ userName, roleName, branchId }: DashboardCont
           Quick Console Shortcuts
         </span>
         <div className="flex flex-wrap gap-3">
-          <PermissionGate module="students" action="create">
+          <PermissionGate module="admissions" action="registrar_desk">
             <Button
               variant="tonal"
               icon="person_add"
-              onClick={() => router.push("/students/new")}
+              onClick={() => router.push("/admissions")}
               className="hover:scale-[1.02] transition-all duration-200"
             >
               Enroll Student

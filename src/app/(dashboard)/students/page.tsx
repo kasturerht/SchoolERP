@@ -394,26 +394,15 @@ export default function StudentsPage() {
               Bulk Promotion
             </Button>
           </PermissionGate>
-          <PermissionGate module="students" action="create">
-            {isSuperAdmin ? (
-              <Button
-                variant="filled"
-                icon="upload_file"
-                onClick={() => router.push("/students/new")}
-                className="hidden md:inline-flex bg-primary text-white"
-              >
-                Direct Intake / Migration
-              </Button>
-            ) : (
-              <Button
-                variant="tonal"
-                icon="arrow_forward"
-                onClick={() => router.push("/admissions")}
-                className="hidden md:inline-flex"
-              >
-                New Intake / Admission
-              </Button>
-            )}
+          <PermissionGate module="admissions" action="registrar_desk">
+            <Button
+              variant="tonal"
+              icon="arrow_forward"
+              onClick={() => router.push("/admissions")}
+              className="hidden md:inline-flex"
+            >
+              New Intake / Admission
+            </Button>
           </PermissionGate>
         </div>
 
@@ -535,12 +524,8 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      <PermissionGate module="students" action="create">
-        {isSuperAdmin ? (
-          <FAB icon="upload_file" onClick={() => router.push("/students/new")} />
-        ) : (
-          <FAB icon="arrow_forward" onClick={() => router.push("/admissions")} />
-        )}
+      <PermissionGate module="admissions" action="registrar_desk">
+        <FAB icon="arrow_forward" onClick={() => router.push("/admissions")} />
       </PermissionGate>
     </div>
   );
