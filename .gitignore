@@ -76,4 +76,4 @@ get_admins.js
 test-perms.js
 
 # Prevent mobile folder from ever being tracked or pushed to Git
-mobile/
+mobile/

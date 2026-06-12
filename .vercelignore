@@ -17,3 +17,4 @@ playwright.config.ts
 
 # Ignore local next.js build folder
 .next/
+package-lock.json
