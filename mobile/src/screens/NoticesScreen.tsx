@@ -3,7 +3,7 @@ import {
   StyleSheet,
   Text,
   View,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   RefreshControl,
 } from "react-native";
@@ -64,11 +64,87 @@ export default function NoticesScreen() {
     }
   };
 
+  const renderItem = useCallback(({ item: notice }: { item: any }) => {
+    const isExpanded = expandedNoticeId === notice.id;
+    const categoryColors = getCategoryColor(notice.category);
+
+    return (
+      <View style={styles.noticeCard}>
+        <TouchableOpacity
+          style={styles.noticeHeader}
+          onPress={() => toggleNotice(notice.id)}
+          activeOpacity={0.8}
+        >
+          <View
+            style={[
+              styles.categoryIconBg,
+              { backgroundColor: categoryColors.bg, borderColor: categoryColors.border },
+            ]}
+          >
+            {getCategoryIcon(notice.category)}
+          </View>
+
+          <View style={styles.noticeHeaderMeta}>
+            <View style={styles.badgeRow}>
+              <Text style={[styles.categoryBadge, { color: categoryColors.text }]}>
+                {notice.category}
+              </Text>
+              <Text style={styles.noticeDate}>
+                {new Date(notice.date).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </Text>
+            </View>
+            <Text style={styles.noticeTitle} numberOfLines={2}>
+              {notice.title}
+            </Text>
+          </View>
+
+          <View style={styles.chevronContainer}>
+            {isExpanded ? (
+              <ChevronUp size={18} color="#64748B" />
+            ) : (
+              <ChevronDown size={18} color="#64748B" />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.noticeBody}>
+            <View style={styles.divider} />
+            <Text style={styles.noticeDesc}>{notice.description}</Text>
+            <View style={styles.noticeFooter}>
+              <Text style={styles.authorText}>Issued by: {notice.author}</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }, [expandedNoticeId]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
+      <FlatList
+        data={notices}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.titleBlock}>
+            <Text style={styles.titleText}>Notice Board</Text>
+            <Text style={styles.subText}>
+              Keep track of academic notices, event alerts, and urgent reminders
+            </Text>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No notices posted yet.</Text>
+          </View>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -77,84 +153,10 @@ export default function NoticesScreen() {
             tintColor="#0F766E"
           />
         }
-      >
-        
-        {/* Title Block */}
-        <View style={styles.titleBlock}>
-          <Text style={styles.titleText}>Notice Board</Text>
-          <Text style={styles.subText}>
-            Keep track of academic notices, event alerts, and urgent reminders
-          </Text>
-        </View>
-
-        {/* Notices list */}
-        {notices.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No notices posted yet.</Text>
-          </View>
-        ) : (
-          notices.map((notice) => {
-            const isExpanded = expandedNoticeId === notice.id;
-            const categoryColors = getCategoryColor(notice.category);
-
-            return (
-              <View key={notice.id} style={styles.noticeCard}>
-                <TouchableOpacity
-                  style={styles.noticeHeader}
-                  onPress={() => toggleNotice(notice.id)}
-                  activeOpacity={0.8}
-                >
-                  <View
-                    style={[
-                      styles.categoryIconBg,
-                      { backgroundColor: categoryColors.bg, borderColor: categoryColors.border },
-                    ]}
-                  >
-                    {getCategoryIcon(notice.category)}
-                  </View>
-
-                  <View style={styles.noticeHeaderMeta}>
-                    <View style={styles.badgeRow}>
-                      <Text style={[styles.categoryBadge, { color: categoryColors.text }]}>
-                        {notice.category}
-                      </Text>
-                      <Text style={styles.noticeDate}>
-                        {new Date(notice.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </Text>
-                    </View>
-                    <Text style={styles.noticeTitle} numberOfLines={2}>
-                      {notice.title}
-                    </Text>
-                  </View>
-
-                  <View style={styles.chevronContainer}>
-                    {isExpanded ? (
-                      <ChevronUp size={18} color="#64748B" />
-                    ) : (
-                      <ChevronDown size={18} color="#64748B" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-
-                {isExpanded && (
-                  <View style={styles.noticeBody}>
-                    <View style={styles.divider} />
-                    <Text style={styles.noticeDesc}>{notice.description}</Text>
-                    <View style={styles.noticeFooter}>
-                      <Text style={styles.authorText}>Issued by: {notice.author}</Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            );
-          })
-        )}
-
-      </ScrollView>
+        initialNumToRender={10}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+      />
     </SafeAreaView>
   );
 }

@@ -4,9 +4,13 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient;
 };
 
-const basePrisma = new PrismaClient({
+const basePrisma = globalForPrisma.prisma ?? new PrismaClient({
   log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
 });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = basePrisma;
+}
 
 const extendedClient = basePrisma.$extends({
   query: {
@@ -189,8 +193,4 @@ const extendedClient = basePrisma.$extends({
   },
 });
 
-export const prisma = (globalForPrisma.prisma ?? extendedClient) as unknown as PrismaClient;
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+export const prisma = extendedClient as unknown as PrismaClient;

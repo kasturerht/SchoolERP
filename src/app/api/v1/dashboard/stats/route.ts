@@ -26,29 +26,123 @@ export async function GET(req: NextRequest) {
     },
   };
 
-  // 1. Core Counts
-  const [students, staff, branches, users] = await Promise.all([
-    prisma.student.count({
-      where: { ...branchWhere, status: "ACTIVE" },
+  // 1. Fetch independent dashboard statistics concurrently (Silicon Valley level optimization)
+  const [
+    [students, staff, branches, users],
+    latestAttendance,
+    invoiceAgg,
+    recentPayments,
+    recentNotices,
+    upcomingEvents,
+    [classesCount, sectionsCount, vehiclesCount, booksCount],
+    [academicYearsCount, subjectMastersCount, totalClassesCount, totalSectionsCount]
+  ] = await Promise.all([
+    // Core Counts
+    Promise.all([
+      prisma.student.count({
+        where: { ...branchWhere, status: "ACTIVE" },
+      }),
+      prisma.staff.count({
+        where: { ...branchWhere, status: "ACTIVE" },
+      }),
+      prisma.branch.count({
+        where: { organizationId: orgId, isActive: true },
+      }),
+      prisma.user.count({
+        where: { organizationId: orgId, isActive: true },
+      }),
+    ]),
+    // Attendance rates (latest recorded date metadata)
+    prisma.studentAttendance.findFirst({
+      where: branchId ? { branchId } : {},
+      orderBy: { date: "desc" },
+      select: { date: true },
     }),
-    prisma.staff.count({
-      where: { ...branchWhere, status: "ACTIVE" },
+    // Financial Health aggregate
+    prisma.invoice.aggregate({
+      where: {
+        student: branchId ? { branchId } : {},
+        status: { not: "CANCELLED" },
+      },
+      _sum: {
+        totalAmount: true,
+        paidAmount: true,
+      },
     }),
-    prisma.branch.count({
-      where: { organizationId: orgId, isActive: true },
+    // Recent payments log
+    prisma.feePayment.findMany({
+      where: {
+        student: branchId ? { branchId } : {},
+      },
+      orderBy: { paidAt: "desc" },
+      take: 5,
+      include: {
+        student: {
+          select: {
+            firstName: true,
+            lastName: true,
+            admissionNo: true,
+          },
+        },
+      },
     }),
-    prisma.user.count({
-      where: { organizationId: orgId, isActive: true },
+    // Portal Announcements (Notices)
+    prisma.notice.findMany({
+      where: {
+        organizationId: orgId,
+        isPublished: true,
+        OR: [
+          { branchId: null },
+          { branchId: branchId || undefined },
+        ],
+      },
+      orderBy: { publishedAt: "desc" },
+      take: 3,
     }),
+    // Academic Events
+    prisma.event.findMany({
+      where: {
+        branchId: branchId || undefined,
+        startDate: {
+          gte: new Date(),
+        },
+      },
+      orderBy: { startDate: "asc" },
+      take: 3,
+    }),
+    // Operational Status Counts
+    Promise.all([
+      prisma.class.count({
+        where: { branchId: branchId || undefined },
+      }),
+      prisma.section.count({
+        where: { class: { branchId: branchId || undefined } },
+      }),
+      prisma.vehicle.count({
+        where: { branchId: branchId || undefined },
+      }),
+      prisma.book.count({
+        where: { branchId: branchId || undefined },
+      }),
+    ]),
+    // Onboarding Telemetry Status
+    Promise.all([
+      prisma.academicYear.count({
+        where: { organizationId: orgId },
+      }),
+      prisma.subjectMaster.count({
+        where: { organizationId: orgId, isActive: true },
+      }),
+      prisma.class.count({
+        where: { organizationId: orgId },
+      }),
+      prisma.section.count({
+        where: { class: { organizationId: orgId } },
+      }),
+    ]),
   ]);
 
-  // 2. Attendance rates (latest recorded date)
-  const latestAttendance = await prisma.studentAttendance.findFirst({
-    where: branchId ? { branchId } : {},
-    orderBy: { date: "desc" },
-    select: { date: true },
-  });
-
+  // 2. Attendance rate details (dependent query block)
   let attendanceSummary = { present: 0, absent: 0, late: 0, total: 0, rate: 0 };
   if (latestAttendance) {
     const logs = await prisma.studentAttendance.findMany({
@@ -73,39 +167,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3. Financial Health
-  const invoiceAgg = await prisma.invoice.aggregate({
-    where: {
-      student: branchId ? { branchId } : {},
-      status: { not: "CANCELLED" },
-    },
-    _sum: {
-      totalAmount: true,
-      paidAmount: true,
-    },
-  });
-
+  // Financial rates mapping
   const totalInvoiced = Number(invoiceAgg._sum.totalAmount || 0);
   const totalCollected = Number(invoiceAgg._sum.paidAmount || 0);
   const outstandingBalance = Math.max(0, totalInvoiced - totalCollected);
   const collectionRate = totalInvoiced > 0 ? Math.round((totalCollected / totalInvoiced) * 100) : 0;
-
-  const recentPayments = await prisma.feePayment.findMany({
-    where: {
-      student: branchId ? { branchId } : {},
-    },
-    orderBy: { paidAt: "desc" },
-    take: 5,
-    include: {
-      student: {
-        select: {
-          firstName: true,
-          lastName: true,
-          admissionNo: true,
-        },
-      },
-    },
-  });
 
   const formattedPayments = recentPayments.map(p => ({
     id: p.id,
@@ -115,64 +181,6 @@ export async function GET(req: NextRequest) {
     method: p.method,
     paidAt: p.paidAt.toISOString(),
   }));
-
-  // 4. Portal Announcements (Notices)
-  const recentNotices = await prisma.notice.findMany({
-    where: {
-      organizationId: orgId,
-      isPublished: true,
-      OR: [
-        { branchId: null },
-        { branchId: branchId || undefined },
-      ],
-    },
-    orderBy: { publishedAt: "desc" },
-    take: 3,
-  });
-
-  // 5. Academic Events
-  const upcomingEvents = await prisma.event.findMany({
-    where: {
-      branchId: branchId || undefined,
-      startDate: {
-        gte: new Date(),
-      },
-    },
-    orderBy: { startDate: "asc" },
-    take: 3,
-  });
-
-  // 6. Operational Status Counts
-  const [classesCount, sectionsCount, vehiclesCount, booksCount] = await Promise.all([
-    prisma.class.count({
-      where: { branchId: branchId || undefined },
-    }),
-    prisma.section.count({
-      where: { class: { branchId: branchId || undefined } },
-    }),
-    prisma.vehicle.count({
-      where: { branchId: branchId || undefined },
-    }),
-    prisma.book.count({
-      where: { branchId: branchId || undefined },
-    }),
-  ]);
-
-  // 7. Onboarding Telemetry Status
-  const [academicYearsCount, subjectMastersCount, totalClassesCount, totalSectionsCount] = await Promise.all([
-    prisma.academicYear.count({
-      where: { organizationId: orgId },
-    }),
-    prisma.subjectMaster.count({
-      where: { organizationId: orgId, isActive: true },
-    }),
-    prisma.class.count({
-      where: { organizationId: orgId },
-    }),
-    prisma.section.count({
-      where: { class: { organizationId: orgId } },
-    }),
-  ]);
 
   const onboardingSteps = {
     academicYear: academicYearsCount > 0,

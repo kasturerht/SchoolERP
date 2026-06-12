@@ -1,6 +1,7 @@
 "use client";
 
-import { DataTable, type Column } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/lazy-table";
+import type { Column } from "@/components/ui/data-table";
 import { PAYMENT_METHOD_LABELS } from "@/lib/validations/fee-payment";
 import { Icon } from "@/components/ui/icon";
 

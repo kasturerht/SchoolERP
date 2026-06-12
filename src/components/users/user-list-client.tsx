@@ -10,7 +10,8 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { DataTable, type Column } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/lazy-table";
+import type { Column } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { useBranches } from "@/hooks/use-branches";

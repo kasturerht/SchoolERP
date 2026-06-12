@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { PermissionsProvider } from "@/hooks/use-permissions";
 
 export default async function DashboardLayout({
   children,
@@ -14,16 +15,18 @@ export default async function DashboardLayout({
   }
 
   return (
-    <DashboardShell
-      user={{
-        name: session.user.name,
-        email: session.user.email,
-        image: session.user.image,
-        role: session.user.roleName,
-        organizationName: session.user.organizationName,
-      }}
-    >
-      {children}
-    </DashboardShell>
+    <PermissionsProvider>
+      <DashboardShell
+        user={{
+          name: session.user.name,
+          email: session.user.email,
+          image: session.user.image,
+          role: session.user.roleName,
+          organizationName: session.user.organizationName,
+        }}
+      >
+        {children}
+      </DashboardShell>
+    </PermissionsProvider>
   );
 }

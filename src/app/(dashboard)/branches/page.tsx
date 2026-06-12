@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchBar } from "@/components/ui/search-bar";
-import { DataTable, type Column } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/lazy-table";
+import type { Column } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { PermissionGate } from "@/components/shared/permission-gate";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";

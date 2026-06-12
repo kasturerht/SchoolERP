@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useMemo, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -47,14 +47,22 @@ export default function AttendanceScreen() {
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
   const firstDayIndex = getFirstDayOfMonth(currentYear, currentMonth);
 
+  // Silicon Valley level optimization: Pre-index logs into a Map to achieve O(1) status lookup inside rendering loop
+  const logsMap = useMemo(() => {
+    const map = new Map<string, string>();
+    logs.forEach((log) => {
+      map.set(log.date, log.status);
+    });
+    return map;
+  }, [logs]);
+
   // Helper to get status of a specific date in YYYY-MM-DD format
-  const getDayStatus = (day: number) => {
+  const getDayStatus = useCallback((day: number) => {
     const dateStr = `${currentYear}-${(currentMonth + 1)
       .toString()
       .padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-    const log = logs.find((l) => l.date === dateStr);
-    return log ? log.status : null;
-  };
+    return logsMap.get(dateStr) || null;
+  }, [currentYear, currentMonth, logsMap]);
 
   // Calendar rendering helper
   const renderCalendarDays = () => {

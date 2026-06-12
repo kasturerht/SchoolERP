@@ -51,12 +51,63 @@ export async function GET(
     const sectionName = latestEnrollment?.section?.name || "N/A";
     const rollNo = student.rollNo || latestEnrollment?.rollNo || "N/A";
 
-    // 2. Fetch Attendance
-    const attendanceLogs = await prisma.studentAttendance.findMany({
-      where: { studentId },
-      orderBy: { date: "asc" },
-    });
+    // 2. Fetch independent child details concurrently (Silicon Valley level optimization)
+    const [attendanceLogs, invoices, marks, notices] = await Promise.all([
+      // Fetch Attendance Logs
+      prisma.studentAttendance.findMany({
+        where: { studentId },
+        orderBy: { date: "asc" },
+      }),
+      // Fetch Invoices
+      prisma.invoice.findMany({
+        where: { studentId, organizationId: student.organizationId },
+        include: {
+          items: true,
+        },
+        orderBy: { dueDate: "desc" },
+      }),
+      // Fetch Marks & Exams
+      prisma.mark.findMany({
+        where: { studentId },
+        include: {
+          examSubject: {
+            include: {
+              exam: true,
+              subject: true,
+            },
+          },
+        },
+        orderBy: {
+          examSubject: {
+            exam: {
+              startDate: "desc",
+            },
+          },
+        },
+      }),
+      // Fetch Notices
+      prisma.notice.findMany({
+        where: {
+          OR: [
+            { branchId: student.branchId },
+            { branchId: null },
+          ],
+          isPublished: true,
+          publishedAt: { lte: new Date() },
+          AND: [
+            {
+              OR: [
+                { expiresAt: null },
+                { expiresAt: { gt: new Date() } }
+              ]
+            }
+          ]
+        },
+        orderBy: { publishedAt: "desc" },
+      }),
+    ]);
 
+    // Process Attendance
     const totalDays = attendanceLogs.length;
     let presentDays = 0;
     let absentDays = 0;
@@ -88,15 +139,7 @@ export async function GET(
       ? Math.round(((presentDays + lateDays) / totalDays) * 1000) / 10
       : 100.0;
 
-    // 3. Fetch Invoices
-    const invoices = await prisma.invoice.findMany({
-      where: { studentId, organizationId: student.organizationId },
-      include: {
-        items: true,
-      },
-      orderBy: { dueDate: "desc" },
-    });
-
+    // Process Invoices
     const invoicesMapped = invoices.map((inv) => {
       let status: "PAID" | "PARTIALLY_PAID" | "UNPAID" | "OVERDUE" = "UNPAID";
       
@@ -114,26 +157,6 @@ export async function GET(
         paidAmount: Number(inv.paidAmount),
         status,
       };
-    });
-
-    // 4. Fetch Marks & Exams
-    const marks = await prisma.mark.findMany({
-      where: { studentId },
-      include: {
-        examSubject: {
-          include: {
-            exam: true,
-            subject: true,
-          },
-        },
-      },
-      orderBy: {
-        examSubject: {
-          exam: {
-            startDate: "desc",
-          },
-        },
-      },
     });
 
     // Group marks by Exam
@@ -200,27 +223,6 @@ export async function GET(
         result: record.anyFail ? "FAIL" : "PASS" as "PASS" | "FAIL",
         subjects: record.subjects,
       };
-    });
-
-    // 5. Notices for this branch targeting PARENT
-    const notices = await prisma.notice.findMany({
-      where: {
-        OR: [
-          { branchId: student.branchId },
-          { branchId: null },
-        ],
-        isPublished: true,
-        publishedAt: { lte: new Date() },
-        AND: [
-          {
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gt: new Date() } }
-            ]
-          }
-        ]
-      },
-      orderBy: { publishedAt: "desc" },
     });
 
     const noticesMapped = notices.filter((n) => {
