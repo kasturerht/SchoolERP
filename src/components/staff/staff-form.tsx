@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -149,6 +149,19 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const idempotencyKeyRef = useRef<string>("");
+
+  const generateIdempotencyKey = () => {
+    if (typeof window !== "undefined" && window.crypto && window.crypto.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  };
+
+  useEffect(() => {
+    idempotencyKeyRef.current = generateIdempotencyKey();
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "custom">("all");
 
@@ -230,6 +243,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setErrors({});
 
     // Client-side sequential checks
@@ -296,13 +310,17 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
       try {
         const res = await fetch("/api/v1/staff", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKeyRef.current
+          },
           body: JSON.stringify(result.data),
         });
         const data = await res.json();
 
         if (!data.success) {
           snackbar.show(data.error?.message ?? "Failed to create staff member", "error");
+          idempotencyKeyRef.current = generateIdempotencyKey(); // Reset on error
           return;
         }
 
@@ -311,6 +329,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
         router.refresh();
       } catch {
         snackbar.show("An error occurred", "error");
+        idempotencyKeyRef.current = generateIdempotencyKey(); // Reset on error
       } finally {
         setLoading(false);
       }
