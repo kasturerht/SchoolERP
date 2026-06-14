@@ -244,6 +244,13 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
+
+    // Guard: Prevent submission if the user is not on the final step (Security & Access)
+    if (activeStep < 3) {
+      handleContinue();
+      return;
+    }
+
     setErrors({});
 
     // Client-side sequential checks
@@ -1265,6 +1272,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
 
                 {activeStep < 3 ? (
                   <Button
+                    key="btn-continue"
                     type="button"
                     variant="filled"
                     onClick={handleContinue}
@@ -1276,6 +1284,7 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                   </Button>
                 ) : (
                   <Button
+                    key="btn-submit"
                     type="submit"
                     variant="filled"
                     loading={loading}
