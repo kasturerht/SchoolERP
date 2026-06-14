@@ -538,115 +538,118 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
           
           {/* Stepper Card */}
           <Card className="border border-slate-200/50 dark:border-zinc-800/50 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md shadow-sm rounded-2xl p-6">
-            <div className="space-y-6">
+            <div className="relative pl-1">
+              {/* Background Track Line */}
+              <div className="absolute left-[22px] top-[18px] bottom-[18px] w-0.5 bg-slate-100 dark:bg-zinc-800/80 pointer-events-none" />
               
-              {/* Step 1 button */}
-              <button
-                type="button"
-                onClick={() => handleStepClick(1)}
-                className="flex items-start gap-4 text-left w-full group focus:outline-none"
-              >
-                <div className="flex flex-col items-center shrink-0">
+              {/* Active Connector Line Fill */}
+              <div 
+                className="absolute left-[22px] top-[18px] w-0.5 bg-primary transition-all duration-500 ease-in-out pointer-events-none" 
+                style={{
+                  height: activeStep === 1 
+                    ? '0%' 
+                    : activeStep === 2 
+                      ? '50%' 
+                      : '100%'
+                }}
+              />
+
+              <div className="flex flex-col gap-6">
+                
+                {/* Step 1 button */}
+                <button
+                  type="button"
+                  onClick={() => handleStepClick(1)}
+                  className="flex items-start gap-4 text-left w-full group focus:outline-none relative"
+                >
                   <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 shadow-sm border text-sm",
+                    "w-9 h-9 rounded-full flex items-center justify-center font-bold transition-all duration-300 shadow-sm border text-sm shrink-0 z-10",
                     activeStep === 1
                       ? "bg-primary text-on-primary border-primary ring-4 ring-primary/10 shadow-md shadow-primary/20"
                       : name && !errors.name
                       ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                      : "bg-slate-50 dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-800"
+                      : "bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-800"
                   )}>
                     {name && !errors.name && activeStep !== 1 ? (
-                      <span className="material-symbols-outlined text-[18px] font-bold">check</span>
+                      <span className="material-symbols-outlined text-[16px] font-bold">check</span>
                     ) : (
                       "1"
                     )}
                   </div>
-                  <div className={cn(
-                    "w-0.5 h-12 my-1.5 transition-colors duration-300",
-                    activeStep > 1 ? "bg-primary" : "bg-slate-200 dark:bg-zinc-800"
-                  )} />
-                </div>
-                <div className="pt-1">
-                  <h4 className={cn(
-                    "text-sm font-bold transition-colors duration-300",
-                    activeStep === 1 ? "text-primary" : "text-slate-700 dark:text-zinc-200"
-                  )}>
-                    Basic Profile
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
-                    Personal & contact details
-                  </p>
-                </div>
-              </button>
+                  <div className="pt-0.5">
+                    <h4 className={cn(
+                      "text-sm font-bold transition-colors duration-300",
+                      activeStep === 1 ? "text-primary" : "text-slate-700 dark:text-zinc-200"
+                    )}>
+                      Basic Profile
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
+                      Personal & contact details
+                    </p>
+                  </div>
+                </button>
 
-              {/* Step 2 button */}
-              <button
-                type="button"
-                onClick={() => handleStepClick(2)}
-                className="flex items-start gap-4 text-left w-full group focus:outline-none"
-              >
-                <div className="flex flex-col items-center shrink-0">
+                {/* Step 2 button */}
+                <button
+                  type="button"
+                  onClick={() => handleStepClick(2)}
+                  className="flex items-start gap-4 text-left w-full group focus:outline-none relative"
+                >
                   <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 shadow-sm border text-sm",
+                    "w-9 h-9 rounded-full flex items-center justify-center font-bold transition-all duration-300 shadow-sm border text-sm shrink-0 z-10",
                     activeStep === 2
                       ? "bg-primary text-on-primary border-primary ring-4 ring-primary/10 shadow-md shadow-primary/20"
                       : roleId && !errors.roleId
                       ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                      : "bg-slate-50 dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-800"
+                      : "bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-800"
                   )}>
                     {roleId && !errors.roleId && activeStep !== 2 ? (
-                      <span className="material-symbols-outlined text-[18px] font-bold">check</span>
+                      <span className="material-symbols-outlined text-[16px] font-bold">check</span>
                     ) : (
                       "2"
                     )}
                   </div>
-                  <div className={cn(
-                    "w-0.5 h-12 my-1.5 transition-colors duration-300",
-                    activeStep > 2 ? "bg-primary" : "bg-slate-200 dark:bg-zinc-800"
-                  )} />
-                </div>
-                <div className="pt-1">
-                  <h4 className={cn(
-                    "text-sm font-bold transition-colors duration-300",
-                    activeStep === 2 ? "text-primary" : "text-slate-700 dark:text-zinc-200"
-                  )}>
-                    Professional Details
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
-                    Placement & role context
-                  </p>
-                </div>
-              </button>
+                  <div className="pt-0.5">
+                    <h4 className={cn(
+                      "text-sm font-bold transition-colors duration-300",
+                      activeStep === 2 ? "text-primary" : "text-slate-700 dark:text-zinc-200"
+                    )}>
+                      Professional Details
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
+                      Placement & role context
+                    </p>
+                  </div>
+                </button>
 
-              {/* Step 3 button */}
-              <button
-                type="button"
-                onClick={() => handleStepClick(3)}
-                className="flex items-start gap-4 text-left w-full group focus:outline-none"
-              >
-                <div className="flex flex-col items-center shrink-0">
+                {/* Step 3 button */}
+                <button
+                  type="button"
+                  onClick={() => handleStepClick(3)}
+                  className="flex items-start gap-4 text-left w-full group focus:outline-none relative"
+                >
                   <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 shadow-sm border text-sm",
+                    "w-9 h-9 rounded-full flex items-center justify-center font-bold transition-all duration-300 shadow-sm border text-sm shrink-0 z-10",
                     activeStep === 3
                       ? "bg-primary text-on-primary border-primary ring-4 ring-primary/10 shadow-md shadow-primary/20"
-                      : "bg-slate-50 dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-800"
+                      : "bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-800"
                   )}>
-                    "3"
+                    3
                   </div>
-                </div>
-                <div className="pt-1">
-                  <h4 className={cn(
-                    "text-sm font-bold transition-colors duration-300",
-                    activeStep === 3 ? "text-primary" : "text-slate-700 dark:text-zinc-200"
-                  )}>
-                    Security & Access
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
-                    Login & permission overrides
-                  </p>
-                </div>
-              </button>
-              
+                  <div className="pt-0.5">
+                    <h4 className={cn(
+                      "text-sm font-bold transition-colors duration-300",
+                      activeStep === 3 ? "text-primary" : "text-slate-700 dark:text-zinc-200"
+                    )}>
+                      Security & Access
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
+                      Login & permission overrides
+                    </p>
+                  </div>
+                </button>
+
+              </div>
             </div>
           </Card>
 
