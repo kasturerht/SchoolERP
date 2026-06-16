@@ -6,6 +6,8 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { cn } from "@/lib/utils";
 import { SelectField } from "@/components/ui/select-field";
 import {
   Select,
@@ -212,6 +214,8 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
       lateFeeGrace: Number(t.lateFeeGrace),
     })) ?? []
   );
+
+  const [expandedLateFeeIndex, setExpandedLateFeeIndex] = useState<number | null>(null);
 
   const { teachers, isLoading: teachersLoading } = useTeachers(branchId);
 
@@ -442,14 +446,66 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
     ]);
   }
 
+  function validateInstallmentDates(list: InstallmentRow[]): Record<string, string> {
+    const newErrors: Record<string, string> = {};
+    const termTypesList = ["FULL_TERM", "HALF_TERM", "SHORT_TERM"] as const;
+    
+    for (const t of termTypesList) {
+      const termInstallments = list
+        .map((inst, index) => ({ inst, index }))
+        .filter(({ inst }) => inst.termType === t);
+
+      for (let i = 1; i < termInstallments.length; i++) {
+        const prev = termInstallments[i - 1];
+        const curr = termInstallments[i];
+        
+        if (prev.inst.dueDate && curr.inst.dueDate) {
+          const prevD = new Date(prev.inst.dueDate);
+          const currD = new Date(curr.inst.dueDate);
+          
+          if (!isNaN(prevD.getTime()) && !isNaN(currD.getTime())) {
+            if (currD < prevD) {
+              newErrors[`installments.${curr.index}.dueDate`] = `Must be on or after ${prev.inst.name || `Installment ${i}`} (${prev.inst.dueDate})`;
+            }
+          }
+        }
+      }
+    }
+    return newErrors;
+  }
+
   function removeInstallment(index: number) {
-    setInstallments((prev) => prev.filter((_, i) => i !== index));
+    setInstallments((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      const dateErrors = validateInstallmentDates(updated);
+      setErrors((prevErrors) => {
+        const cleaned = { ...prevErrors };
+        for (const key in cleaned) {
+          if (key.startsWith("installments.") && key.endsWith(".dueDate")) {
+            delete cleaned[key];
+          }
+        }
+        return { ...cleaned, ...dateErrors };
+      });
+      return updated;
+    });
   }
 
   function updateInstallment(index: number, field: keyof InstallmentRow, value: any) {
-    setInstallments((prev) =>
-      prev.map((inst, i) => (i === index ? { ...inst, [field]: value } : inst))
-    );
+    setInstallments((prev) => {
+      const updated = prev.map((inst, i) => (i === index ? { ...inst, [field]: value } : inst));
+      const dateErrors = validateInstallmentDates(updated);
+      setErrors((prevErrors) => {
+        const cleaned = { ...prevErrors };
+        for (const key in cleaned) {
+          if (key.startsWith("installments.") && key.endsWith(".dueDate")) {
+            delete cleaned[key];
+          }
+        }
+        return { ...cleaned, ...dateErrors };
+      });
+      return updated;
+    });
   }
 
   const installmentsTotal = installments.reduce((sum, inst) => {
@@ -577,6 +633,14 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
           installments: formattedInstallments,
           status: nextStatus,
         };
+
+    // Chronological date verification
+    const dateSequenceErrors = validateInstallmentDates(installments);
+    if (Object.keys(dateSequenceErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...dateSequenceErrors }));
+      snackbar.show("Installment due dates must be in chronological order.", "error");
+      return;
+    }
 
     // Sum verification on final submit
     if (targetTab === "finish") {
@@ -723,7 +787,16 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); saveStep("finish"); }} className="mx-auto max-w-2xl">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        saveStep("finish");
+      }}
+      className={cn(
+        "mx-auto transition-all duration-300 ease-in-out",
+        activeMainTab === "fees-and-installments" ? "max-w-5xl" : "max-w-2xl"
+      )}
+    >
       {hasEnrolledStudents && (
         <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-900/30 p-5 text-sm text-amber-800 dark:text-amber-300 flex items-start gap-3.5 shadow-sm backdrop-blur-sm animate-fadeIn">
           <div className="p-2 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
@@ -1056,7 +1129,9 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
               </div>
 
               {/* Sub-Tab Content based on activeTermTab */}
-              <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                {/* Left Column (Inputs) */}
+                <div className="lg:col-span-2 space-y-6">
                 
                 {/* A. FEE STRUCTURE SECTION */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-sm border-t-4 border-t-blue-500 overflow-hidden">
@@ -1097,9 +1172,8 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                             />
                           </div>
                           <div className="w-40">
-                            <TextField
+                            <CurrencyInput
                               label=""
-                              type="number"
                               placeholder="Amount (₹)"
                               value={fee.amount.toString()}
                               onChange={(e) =>
@@ -1121,10 +1195,26 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                           )}
                         </div>
                       ))}
+                    </div>
+
+                    {fees.filter((f) => f.termType === activeTermTab).length > 0 && (
+                      <div className="flex justify-between items-center pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 px-1 select-none">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Total Fees</span>
+                        <span className="text-sm font-black text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-200/60 dark:border-slate-800/80 shadow-sm font-mono">
+                          ₹{fees
+                            .filter((f) => f.termType === activeTermTab)
+                            .reduce((sum, f) => {
+                              const amt = parseFloat(f.amount.toString()) || 0;
+                              return sum + amt;
+                            }, 0)
+                            .toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    )}
 
                     {fees.filter(f => f.termType === activeTermTab).length === 0 && (
                       <p className="text-body-sm text-on-surface-variant text-center py-4 bg-slate-50/30 rounded-xl border border-dashed border-outline-variant/30">
-                        No fees added for this term yet. Click &ldquo;Add Fee Row&rdquo; to begin.
+                        No fees added for this term yet. Click &ldquo;Add Fee Item&rdquo; to begin.
                       </p>
                     )}
 
@@ -1137,13 +1227,12 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                           onClick={() => addFee(activeTermTab)}
                           className="hover:scale-[1.02] transition-all duration-200"
                         >
-                          Add Fee Row
+                          Add Fee Item
                         </Button>
                       </div>
                     )}
                   </div>
                 </div>
-              </div>
 
                 {/* B. INSTALLMENTS SECTION */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-sm border-t-4 border-t-primary overflow-hidden">
@@ -1163,165 +1252,229 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                     </div>
                   </div>
 
-                  <div className="p-5 space-y-6">
-                    <div className="space-y-6">
-                    {installments
-                      .map((inst, index) => ({ inst, index }))
-                      .filter(({ inst }) => inst.termType === activeTermTab)
-                      .map(({ inst, index }, mappedIdx) => (
-                        <div
-                          key={index}
-                          className="relative p-6 space-y-6 bg-white dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 animate-fadeIn"
-                        >
-                          <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800/50">
-                            <div className="flex items-center gap-2">
-                              <span className="h-5 w-1.5 rounded-full bg-primary" />
-                              <p className="text-sm font-black text-slate-800 dark:text-slate-200">
-                                Installment #{mappedIdx + 1}
-                              </p>
-                            </div>
-                            {!hasInvoices && (
-                              <button
-                                type="button"
-                                onClick={() => removeInstallment(index)}
-                                className="rounded-full p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:text-slate-500 dark:hover:text-rose-400 dark:hover:bg-rose-950/20 transition-all duration-200 cursor-pointer flex items-center justify-center"
-                              >
-                                <Icon name="close" size={18} />
-                              </button>
-                            )}
-                          </div>
+                  <div className="p-6">
+                    {/* Timeline Container */}
+                    <div className="relative space-y-6">
+                      {/* Timeline Vertical Connector Line */}
+                      {installments.filter(i => i.termType === activeTermTab).length > 1 && (
+                        <div className="absolute left-[13px] top-[14px] bottom-[14px] w-0.5 bg-slate-200 dark:bg-slate-800 pointer-events-none" />
+                      )}
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                            <TextField
-                              variant="compact"
-                              label="Installment Name"
-                              placeholder="e.g. Admission / Term 1"
-                              value={inst.name}
-                              onChange={(e) =>
-                                updateInstallment(index, "name", e.target.value)
-                              }
-                              error={errors[`installments.${index}.name`]}
-                              disabled={hasInvoices}
-                              required
-                              fullWidth
-                            />
-                            <TextField
-                              variant="compact"
-                              label="Amount (₹)"
-                              type="number"
-                              placeholder="e.g. 15000"
-                              value={inst.amount.toString()}
-                              onChange={(e) =>
-                                updateInstallment(index, "amount", e.target.value)
-                              }
-                              error={errors[`installments.${index}.amount`]}
-                              disabled={hasInvoices}
-                              required
-                              fullWidth
-                            />
-                            <TextField
-                              variant="compact"
-                              label="Due Date"
-                              type="date"
-                              value={inst.dueDate}
-                              onChange={(e) =>
-                                updateInstallment(index, "dueDate", e.target.value)
-                              }
-                              error={errors[`installments.${index}.dueDate`]}
-                              disabled={false}
-                              required
-                              fullWidth
-                            />
-                          </div>
+                      {installments
+                        .map((inst, index) => ({ inst, index }))
+                        .filter(({ inst }) => inst.termType === activeTermTab)
+                        .map(({ inst, index }, mappedIdx) => {
+                          const isExpanded = expandedLateFeeIndex === index;
+                          const hasError = errors[`installments.${index}.name`] || errors[`installments.${index}.amount`] || errors[`installments.${index}.dueDate`];
 
-                          {/* Late fee subform */}
-                          <div className="pt-4 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
-                            <div className="flex items-center gap-2.5">
-                              <input
-                                type="checkbox"
-                                id={`late-fee-active-${index}`}
-                                checked={inst.lateFeeActive}
-                                onChange={(e) =>
-                                  updateInstallment(index, "lateFeeActive", e.target.checked)
-                                }
-                                disabled={false}
-                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/40 cursor-pointer"
-                              />
-                              <label
-                                htmlFor={`late-fee-active-${index}`}
-                                className="text-sm font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none"
-                              >
-                                Apply Late Fees
-                              </label>
-                            </div>
+                          const termInstallments = installments.filter(i => i.termType === activeTermTab);
+                          const prevInst = mappedIdx > 0 ? termInstallments[mappedIdx - 1] : null;
+                          const minDate = prevInst && prevInst.dueDate ? prevInst.dueDate : undefined;
 
-                            {inst.lateFeeActive && (
-                              <div className="p-4 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-900 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-5 animate-fadeIn">
-                                <SelectField
-                                  variant="compact"
-                                  label="Late Fee Type"
-                                  value={inst.lateFeeType || "DAILY"}
-                                  onValueChange={(val) => {
-                                    updateInstallment(index, "lateFeeType", val as any);
-                                    updateInstallment(index, "lateFeeValue", 0);
-                                    updateInstallment(index, "lateFeePerDay", 0);
-                                  }}
-                                  disabled={false}
-                                  required
-                                  fullWidth
-                                  options={[
-                                    { value: "DAILY", label: "Daily Rate" },
-                                    { value: "LUMP_SUM", label: "One-time Lump-sum" },
-                                    { value: "PERCENTAGE", label: "Percentage of Installment" },
-                                  ]}
-                                />
-
-                                <TextField
-                                  variant="compact"
-                                  label={
-                                    inst.lateFeeType === "LUMP_SUM"
-                                      ? "Fixed Penalty (₹)"
-                                      : inst.lateFeeType === "PERCENTAGE"
-                                        ? "Penalty Rate (%)"
-                                        : "Penalty Rate (₹/day)"
-                                  }
-                                  type="number"
-                                  placeholder={
-                                    inst.lateFeeType === "PERCENTAGE" ? "e.g. 5" : "e.g. 50"
-                                  }
-                                  value={(inst.lateFeeValue ?? 0).toString()}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    updateInstallment(index, "lateFeeValue", val);
-                                    if ((inst.lateFeeType || "DAILY") === "DAILY") {
-                                      updateInstallment(index, "lateFeePerDay", val);
-                                    }
-                                  }}
-                                  error={errors[`installments.${index}.lateFeeValue`]}
-                                  disabled={false}
-                                  required
-                                  fullWidth
-                                />
-
-                                <TextField
-                                  variant="compact"
-                                  label="Grace Days"
-                                  type="number"
-                                  placeholder="e.g. 2"
-                                  value={inst.lateFeeGrace.toString()}
-                                  onChange={(e) =>
-                                    updateInstallment(index, "lateFeeGrace", e.target.value)
-                                  }
-                                  error={errors[`installments.${index}.lateFeeGrace`]}
-                                  disabled={false}
-                                  required
-                                  fullWidth
-                                />
+                          return (
+                            <div key={index} className="relative pl-10 group animate-fadeIn">
+                              {/* Timeline Bullet Badge */}
+                              <div className={cn(
+                                "absolute left-0 top-1.5 flex h-7 w-7 items-center justify-center rounded-full text-xs font-black shadow-sm transition-all duration-300 border-2 select-none z-10",
+                                hasError
+                                  ? "bg-rose-50 border-rose-300 text-rose-600 dark:bg-rose-950/20 dark:border-rose-800 dark:text-rose-450"
+                                  : "bg-white border-slate-200 text-slate-500 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-400 group-hover:border-primary group-hover:text-primary"
+                              )}>
+                                {mappedIdx + 1}
                               </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+
+                              {/* Installment Form Inputs Row */}
+                              <div className="space-y-3">
+                                <div className="flex flex-col md:flex-row md:items-end gap-4">
+                                  {/* Name Input */}
+                                  <div className="flex-1 min-w-[200px]">
+                                    <TextField
+                                      variant="compact"
+                                      label="Installment Name"
+                                      placeholder="e.g. Admission / Term 1"
+                                      value={inst.name}
+                                      onChange={(e) =>
+                                        updateInstallment(index, "name", e.target.value)
+                                      }
+                                      error={errors[`installments.${index}.name`]}
+                                      disabled={hasInvoices}
+                                      required
+                                      fullWidth
+                                    />
+                                  </div>
+
+                                  {/* Due Date Input */}
+                                  <div className="w-full md:w-48">
+                                    <TextField
+                                      variant="compact"
+                                      label="Due Date"
+                                      type="date"
+                                      value={inst.dueDate}
+                                      onChange={(e) =>
+                                        updateInstallment(index, "dueDate", e.target.value)
+                                      }
+                                      min={minDate}
+                                      error={errors[`installments.${index}.dueDate`]}
+                                      disabled={false}
+                                      required
+                                      fullWidth
+                                    />
+                                  </div>
+
+                                  {/* Amount Input */}
+                                  <div className="w-full md:w-48">
+                                    <CurrencyInput
+                                      variant="compact"
+                                      label="Amount"
+                                      placeholder="e.g. 15,000"
+                                      value={inst.amount.toString()}
+                                      onChange={(e) =>
+                                        updateInstallment(index, "amount", e.target.value)
+                                      }
+                                      error={errors[`installments.${index}.amount`]}
+                                      disabled={hasInvoices}
+                                      required
+                                      fullWidth
+                                    />
+                                  </div>
+
+                                  {/* Action Buttons */}
+                                  <div className="flex items-center gap-1.5 h-10 self-end">
+                                    {!hasInvoices && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeInstallment(index)}
+                                        className="rounded-lg p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50/50 dark:text-slate-500 dark:hover:text-rose-450 dark:hover:bg-rose-950/20 transition-all duration-200 cursor-pointer flex items-center justify-center border border-transparent hover:border-rose-100 dark:hover:border-rose-950/50"
+                                        title="Delete Installment"
+                                      >
+                                        <Icon name="delete" size={18} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Late Fee Summary & Toggle Tray */}
+                                <div className="flex flex-wrap items-center gap-2.5 pt-0.5">
+                                  {inst.lateFeeActive ? (
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100/80 dark:border-emerald-900/40 shadow-sm animate-fadeIn">
+                                      <Icon name="schedule" size={14} className="text-emerald-500" />
+                                      <span>
+                                        Late Fee: {inst.lateFeeType === "DAILY" && `₹${inst.lateFeeValue}/day`}
+                                        {inst.lateFeeType === "LUMP_SUM" && `₹${inst.lateFeeValue} One-time`}
+                                        {inst.lateFeeType === "PERCENTAGE" && `${inst.lateFeeValue}%`}
+                                        {Number(inst.lateFeeGrace) > 0 ? ` (Grace: ${inst.lateFeeGrace}d)` : " (No grace)"}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedLateFeeIndex(isExpanded ? null : index)}
+                                        className="ml-1 p-0.5 rounded text-emerald-600 hover:text-emerald-900 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:text-emerald-250 dark:hover:bg-emerald-900/50 cursor-pointer flex items-center justify-center transition-all duration-150"
+                                        title="Edit Late Fee settings"
+                                      >
+                                        <Icon name="edit" size={13} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          updateInstallment(index, "lateFeeActive", false);
+                                          if (isExpanded) setExpandedLateFeeIndex(null);
+                                        }}
+                                        className="p-0.5 rounded text-emerald-450 hover:text-rose-600 hover:bg-rose-50 dark:text-emerald-500 dark:hover:text-rose-400 dark:hover:bg-rose-950/30 cursor-pointer flex items-center justify-center transition-all duration-150"
+                                        title="Remove Late Fee policy"
+                                      >
+                                        <Icon name="close" size={13} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateInstallment(index, "lateFeeActive", true);
+                                        setExpandedLateFeeIndex(index);
+                                      }}
+                                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold text-slate-500 hover:text-primary bg-slate-50 hover:bg-slate-100 border border-slate-200/80 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-primary dark:hover:bg-slate-800 dark:border-slate-800 transition-all duration-150 cursor-pointer"
+                                    >
+                                      <Icon name="add" size={13} />
+                                      <span>Apply Late Fee</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Collapsible Late Fee Form Panel */}
+                                {isExpanded && inst.lateFeeActive && (
+                                  <div className="p-4 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-800/80 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4 animate-slideDown mt-2">
+                                    <SelectField
+                                      variant="compact"
+                                      label="Late Fee Type"
+                                      value={inst.lateFeeType || "DAILY"}
+                                      onValueChange={(val) => {
+                                        updateInstallment(index, "lateFeeType", val as any);
+                                        updateInstallment(index, "lateFeeValue", 0);
+                                        updateInstallment(index, "lateFeePerDay", 0);
+                                      }}
+                                      options={[
+                                        { value: "DAILY", label: "Daily Rate" },
+                                        { value: "LUMP_SUM", label: "One-time Lump-sum" },
+                                        { value: "PERCENTAGE", label: "Percentage of Installment" },
+                                      ]}
+                                      fullWidth
+                                    />
+
+                                    <TextField
+                                      variant="compact"
+                                      label={
+                                        inst.lateFeeType === "LUMP_SUM"
+                                          ? "Fixed Penalty (₹)"
+                                          : inst.lateFeeType === "PERCENTAGE"
+                                            ? "Penalty Rate (%)"
+                                            : "Penalty Rate (₹/day)"
+                                      }
+                                      type="number"
+                                      placeholder={
+                                        inst.lateFeeType === "PERCENTAGE" ? "e.g. 5" : "e.g. 50"
+                                      }
+                                      value={(inst.lateFeeValue ?? 0).toString()}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        updateInstallment(index, "lateFeeValue", val);
+                                        if ((inst.lateFeeType || "DAILY") === "DAILY") {
+                                          updateInstallment(index, "lateFeePerDay", val);
+                                        }
+                                      }}
+                                      error={errors[`installments.${index}.lateFeeValue`]}
+                                      required
+                                      fullWidth
+                                    />
+
+                                    <TextField
+                                      variant="compact"
+                                      label="Grace Days"
+                                      type="number"
+                                      placeholder="e.g. 2"
+                                      value={inst.lateFeeGrace.toString()}
+                                      onChange={(e) =>
+                                        updateInstallment(index, "lateFeeGrace", parseInt(e.target.value) || 0)
+                                      }
+                                      error={errors[`installments.${index}.lateFeeGrace`]}
+                                      required
+                                      fullWidth
+                                    />
+                                    
+                                    <div className="col-span-1 md:col-span-3 flex justify-end pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedLateFeeIndex(null)}
+                                        className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-all duration-150 cursor-pointer"
+                                      >
+                                        Done
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
 
                     {installments.filter(i => i.termType === activeTermTab).length === 0 && (
                       <div className="p-8 text-center border border-dashed rounded-xl bg-slate-50/20 border-outline-variant/30">
@@ -1335,12 +1488,15 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                     )}
 
                     {!hasInvoices && (
-                      <div className="flex justify-end pt-2">
+                      <div className="flex justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/60">
                         <Button
                           type="button"
                           variant="outlined"
                           icon="add"
-                          onClick={() => addInstallment(activeTermTab)}
+                          onClick={() => {
+                            addInstallment(activeTermTab);
+                            // Set newly added installment to open late fee settings if they want
+                          }}
                           className="hover:scale-[1.02] transition-all duration-200"
                         >
                           Add Installment
@@ -1351,7 +1507,9 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                 </div>
               </div>
 
-                {/* C. TERM TOTAL SUMMARY AND VERIFICATION CARD */}
+                {/* Right Column (Sticky Summary) */}
+                <div className="lg:col-span-1 lg:sticky lg:top-6 space-y-4">
+                  {/* C. TERM TOTAL SUMMARY AND VERIFICATION CARD */}
                 {(() => {
                   const termFees = fees.filter(f => f.termType === activeTermTab);
                   const termInstallments = installments.filter(i => i.termType === activeTermTab);
@@ -1369,39 +1527,153 @@ export function ClassForm({ mode, initialData }: ClassFormProps) {
                   const isMismatch = Math.abs(totalFees - totalInstallments) > 0.01;
                   const termLabel = activeTermTab === "FULL_TERM" ? "Full Term" : activeTermTab === "HALF_TERM" ? "Half Term" : "Short Term";
 
-                  if (totalFees === 0 && totalInstallments === 0) return null;
+                  if (totalFees === 0 && totalInstallments === 0) {
+                    return (
+                      <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/20 text-slate-450 dark:text-slate-500 text-center shadow-sm select-none">
+                        <Icon name="account_balance_wallet" size={24} className="mx-auto mb-2 text-slate-300 dark:text-slate-700" />
+                        <h5 className="text-xs font-bold text-slate-700 dark:text-slate-350">Allocation Summary</h5>
+                        <p className="text-[11px] leading-relaxed mt-1">Configure your fee components and installment timeline to verify allocation status.</p>
+                      </div>
+                    );
+                  }
+
+                  const pct = totalFees > 0 ? Math.min(100, Math.round((totalInstallments / totalFees) * 100)) : 0;
 
                   return (
-                    <div className={`p-4 rounded-2xl border text-sm transition-colors ${
-                      isMismatch
-                        ? "bg-rose-50 border-rose-200 text-rose-800"
-                        : "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    }`}>
-                      <div className="flex items-start gap-2.5">
-                        <div className="mt-0.5">
-                          <Icon name={isMismatch ? "warning" : "check_circle"} size={20} />
+                    <div className="p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-sm space-y-4">
+                      {/* Widget Header */}
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {termLabel} Allocation
+                        </span>
+                        <div className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase",
+                          isMismatch
+                            ? "bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/40"
+                            : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40"
+                        )}>
+                          <span className={cn("h-1.5 w-1.5 rounded-full", isMismatch ? "bg-rose-500 animate-pulse" : "bg-emerald-500")} />
+                          {isMismatch ? "Mismatch" : "Balanced"}
                         </div>
-                        <div className="space-y-1">
-                          <strong className="font-bold block text-sm">
-                            {termLabel} Fee Summary
-                          </strong>
-                          <div className="text-xs space-y-0.5 font-medium opacity-90">
-                            <div>Total Fees: ₹{totalFees.toLocaleString("en-IN")}</div>
-                            <div>Total Installments Sum: ₹{totalInstallments.toLocaleString("en-IN")}</div>
-                          </div>
-                          {isMismatch && (
-                            <p className="text-xs font-semibold mt-1.5 text-rose-700">
-                              ⚠️ The sum of installments must equal the total fee amount (Difference: ₹{Math.abs(totalFees - totalInstallments).toLocaleString("en-IN")}).
-                            </p>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="space-y-1.5 pt-0.5">
+                        <div className="flex justify-between text-[11px] font-bold text-slate-500 dark:text-slate-450">
+                          <span>Allocation Progress</span>
+                          <span className={cn(isMismatch ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400")}>
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-950 overflow-hidden border border-slate-200/30 dark:border-slate-900">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all duration-500 ease-out",
+                              isMismatch
+                                ? totalInstallments > totalFees
+                                  ? "bg-amber-500"
+                                  : "bg-rose-500"
+                                : "bg-emerald-500"
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Fee Components Breakdown */}
+                      <div className="space-y-2 pt-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
+                          Fee Components
+                        </span>
+                        <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin select-none">
+                          {termFees.map((fee, idx) => (
+                            <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-dashed border-slate-100 dark:border-slate-800/40">
+                              <span className="text-slate-600 dark:text-slate-400 truncate max-w-[130px]" title={fee.name || "Untitled Item"}>
+                                {fee.name || "Untitled Item"}
+                              </span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
+                                ₹{(parseFloat(fee.amount.toString()) || 0).toLocaleString("en-IN")}
+                              </span>
+                            </div>
+                          ))}
+                          {termFees.length === 0 && (
+                            <p className="text-[11px] text-slate-400 italic text-center py-2">No fees configured</p>
                           )}
                         </div>
+                      </div>
+
+                      {/* Installment Milestones Breakdown */}
+                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
+                          Installment Milestones
+                        </span>
+                        <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin select-none">
+                          {termInstallments.map((inst, idx) => (
+                            <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-dashed border-slate-100 dark:border-slate-800/40">
+                              <div className="flex flex-col truncate max-w-[130px]">
+                                <span className="text-slate-600 dark:text-slate-400 truncate font-semibold">
+                                  {inst.name || `Installment ${idx + 1}`}
+                                </span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                                  Due: {inst.dueDate || "Not set"}
+                                </span>
+                              </div>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
+                                ₹{(parseFloat(inst.amount.toString()) || 0).toLocaleString("en-IN")}
+                              </span>
+                            </div>
+                          ))}
+                          {termInstallments.length === 0 && (
+                            <p className="text-[11px] text-slate-400 italic text-center py-2">No installments configured</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Total Summaries & Alerts */}
+                      <div className="pt-3 border-t border-slate-150 dark:border-slate-800/80 space-y-2.5">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-550 dark:text-slate-450">
+                          <span>Total Term Fees</span>
+                          <span className="text-sm font-black text-slate-850 dark:text-slate-100 font-mono">
+                            ₹{totalFees.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-550 dark:text-slate-450">
+                          <span>Allocated Installments</span>
+                          <span className="text-sm font-black text-slate-850 dark:text-slate-100 font-mono">
+                            ₹{totalInstallments.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+
+                        {isMismatch ? (
+                          <div className={cn(
+                            "mt-2 p-3 rounded-xl border text-xs leading-relaxed font-bold",
+                            totalInstallments > totalFees
+                              ? "bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40 text-amber-800 dark:text-amber-300"
+                              : "bg-rose-50/50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40 text-rose-800 dark:text-rose-350"
+                          )}>
+                            <div className="flex gap-2">
+                              <Icon name="info" size={16} className="shrink-0 mt-0.5" />
+                              <span>
+                                {totalInstallments > totalFees
+                                  ? `Over-allocated by ₹${(totalInstallments - totalFees).toLocaleString("en-IN")}. Adjust amounts to match.`
+                                  : `Under-allocated by ₹${(totalFees - totalInstallments).toLocaleString("en-IN")}. Increase installments to cover.`}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 p-3 rounded-xl border bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-350 text-xs leading-relaxed font-bold flex gap-2">
+                            <Icon name="check_circle" size={16} className="shrink-0 mt-0.5 text-emerald-500" />
+                            <span>Allocation balanced! Installment milestones match the total fees perfectly.</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
                 })()}
 
               </div>
-            </TabsContent>
+            </div>
+          </TabsContent>
           </Tabs>
         </CardContent>
       </Card>

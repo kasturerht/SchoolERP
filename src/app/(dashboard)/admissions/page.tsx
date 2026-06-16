@@ -78,6 +78,8 @@ interface Application {
   pincode: string;
   verificationNotes: string | null;
   previousSchool?: string | null;
+  archiveReason?: string | null;
+  statusBeforeArchive?: string | null;
 }
 
 interface FollowUp {
@@ -207,10 +209,12 @@ export default function AdmissionsPage() {
     documents: { id: string; status: "PENDING" | "VERIFIED" | "REJECTED"; remarks: string; documentType: string }[];
     verificationNotes: string;
     nextStatus: "DOCUMENT_VERIFICATION" | "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED";
+    archiveReason: string;
   }>({
     documents: [],
     verificationNotes: "",
     nextStatus: "TEST_SCHEDULED",
+    archiveReason: "",
   });
 
   const [examForm, setExamForm] = useState({
@@ -220,6 +224,7 @@ export default function AdmissionsPage() {
     verdict: "PENDING" as "PENDING" | "PASS" | "FAIL" | "BORDERLINE",
     notes: "",
     applicationStatus: "TEST_SCHEDULED" as "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED",
+    archiveReason: "",
   });
 
   const [promoteForm, setPromoteForm] = useState({
@@ -883,6 +888,7 @@ export default function AdmissionsPage() {
       })),
       verificationNotes: app.verificationNotes || "",
       nextStatus: activeBranch?.hasEntranceTest ? "TEST_SCHEDULED" : "SHORTLISTED",
+      archiveReason: app.archiveReason || "",
     });
 
     setExamForm({
@@ -894,6 +900,7 @@ export default function AdmissionsPage() {
       verdict: (app.examResult?.verdict || "PENDING") as any,
       notes: app.examResult?.notes || "",
       applicationStatus: "SHORTLISTED",
+      archiveReason: app.archiveReason || "",
     });
 
     setPromoteForm({
@@ -1019,6 +1026,14 @@ export default function AdmissionsPage() {
     if (!selectedApp) return;
     setActionLoading(true);
     setFormError(null);
+
+    if (verifyForm.nextStatus === "REJECTED" && (!verifyForm.archiveReason || verifyForm.archiveReason.trim() === "")) {
+      setFormError("Rejection reason is required.");
+      snackbar.show("Rejection reason is required.", "error");
+      setActionLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/verify`, {
         method: "POST",
@@ -1027,6 +1042,7 @@ export default function AdmissionsPage() {
           documents: verifyForm.documents,
           verificationNotes: verifyForm.verificationNotes,
           applicationStatus: verifyForm.nextStatus,
+          archiveReason: verifyForm.nextStatus === "REJECTED" ? verifyForm.archiveReason : undefined,
         }),
       });
       const data = await res.json();
@@ -1055,6 +1071,15 @@ export default function AdmissionsPage() {
     if (!selectedApp) return;
     setActionLoading(true);
     setFormError(null);
+
+    const nextStatus = examForm.verdict === "PASS" ? "SHORTLISTED" : examForm.applicationStatus;
+    if (nextStatus === "REJECTED" && (!examForm.archiveReason || examForm.archiveReason.trim() === "")) {
+      setFormError("Rejection reason is required.");
+      snackbar.show("Rejection reason is required.", "error");
+      setActionLoading(false);
+      return;
+    }
+
     try {
       const payload = {
         examDate: examForm.examDate,
@@ -1062,7 +1087,8 @@ export default function AdmissionsPage() {
         marksObtained: examForm.marksObtained ? Number(examForm.marksObtained) : undefined,
         verdict: examForm.verdict,
         notes: examForm.notes,
-        applicationStatus: examForm.verdict === "PASS" ? "SHORTLISTED" : examForm.applicationStatus,
+        applicationStatus: nextStatus,
+        archiveReason: nextStatus === "REJECTED" ? examForm.archiveReason : undefined,
       };
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/schedule-test`, {
         method: "POST",
@@ -1079,6 +1105,70 @@ export default function AdmissionsPage() {
         fetchDashboardData();
       } else {
         const errMsg = data.error?.message || "Failed to save exam details.";
+        setFormError(errMsg);
+        snackbar.show(errMsg, "error");
+      }
+    } catch {
+      setFormError("Network error.");
+      snackbar.show("Network error.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleWithdrawApplicant = async (reason: string) => {
+    if (!selectedApp) return false;
+    setActionLoading(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Application withdrawn successfully.", "success");
+        setFormError(null);
+        const refreshedApp = data.data;
+        setApplications((prev) => prev.map((a) => (a.id === refreshedApp.id ? refreshedApp : a)));
+        handleOpenWorkspace(refreshedApp);
+        fetchDashboardData();
+        return true;
+      } else {
+        const errMsg = data.error?.message || "Failed to withdraw application.";
+        setFormError(errMsg);
+        snackbar.show(errMsg, "error");
+        return false;
+      }
+    } catch {
+      setFormError("Network error.");
+      snackbar.show("Network error.", "error");
+      return false;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReactivateApplicant = async () => {
+    if (!selectedApp) return;
+    setActionLoading(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/reactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.success) {
+        snackbar.show("Applicant reactivated successfully.", "success");
+        setFormError(null);
+        const refreshedApp = data.data;
+        setApplications((prev) => prev.map((a) => (a.id === refreshedApp.id ? refreshedApp : a)));
+        handleOpenWorkspace(refreshedApp);
+        fetchDashboardData();
+      } else {
+        const errMsg = data.error?.message || "Failed to reactivate applicant.";
         setFormError(errMsg);
         snackbar.show(errMsg, "error");
       }
@@ -1425,7 +1515,13 @@ export default function AdmissionsPage() {
       {/* 5. Main Desk Workspace rendering */}
       <div className="flex-1 overflow-hidden min-h-0">
         {viewMode === "board" ? (
-          <div className="h-full overflow-y-auto">
+          <div className="h-full overflow-y-auto space-y-4">
+            {includeArchives && activeTab === "applications" && (
+              <div className="mx-1 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-2.5 text-xs font-bold text-amber-800 dark:text-amber-400">
+                <Icon name="warning" size={16} className="text-amber-600 shrink-0" />
+                <span>Archives (Admitted, Rejected, Withdrawn) are only visible in List View. Switch to List View to manage archived candidates.</span>
+              </div>
+            )}
             {isDatabaseEmpty ? (
               <div className="max-w-4xl mx-auto py-10 space-y-8 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 p-8 rounded-3xl">
                 <div className="text-center space-y-2 p-6 bg-gradient-to-br from-primary/10 to-teal-50/50 border border-primary/10 rounded-3xl shadow-sm">
@@ -1561,6 +1657,8 @@ export default function AdmissionsPage() {
         onVerifyDocs={handleVerifyDocuments}
         onSaveExam={handleSaveExam}
         onPromote={handlePromote}
+        onWithdrawApplicant={handleWithdrawApplicant}
+        onReactivateApplicant={handleReactivateApplicant}
         actionLoading={actionLoading}
         formError={formError}
         setFormError={setFormError}

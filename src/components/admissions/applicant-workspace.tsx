@@ -5,6 +5,9 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } fr
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { BaseCurrencyInput } from "@/components/ui/base-currency-input";
+import { formatIndianNumber } from "@/lib/utils-format";
 
 interface DocumentItem {
   id: string;
@@ -55,6 +58,8 @@ interface Application {
   address: string;
   pincode: string;
   verificationNotes: string | null;
+  archiveReason?: string | null;
+  statusBeforeArchive?: string | null;
 }
 
 interface WorkspaceProps {
@@ -82,6 +87,7 @@ interface WorkspaceProps {
     documents: DocumentItem[];
     verificationNotes: string;
     nextStatus: "DOCUMENT_VERIFICATION" | "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED";
+    archiveReason: string;
   };
   setVerifyForm: (val: any) => void;
   examForm: {
@@ -91,11 +97,14 @@ interface WorkspaceProps {
     verdict: "PENDING" | "PASS" | "FAIL" | "BORDERLINE";
     notes: string;
     applicationStatus: "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED";
+    archiveReason: string;
   };
   setExamForm: (val: any) => void;
   onVerifyDocs: (e: React.FormEvent) => void;
   onSaveExam: (e: React.FormEvent) => void;
   onPromote: (e: React.FormEvent) => void;
+  onWithdrawApplicant?: (reason: string) => Promise<boolean>;
+  onReactivateApplicant?: () => Promise<void>;
   actionLoading: boolean;
   formError?: string | null;
   setFormError?: (err: string | null) => void;
@@ -120,13 +129,38 @@ export default function ApplicantWorkspace({
   onVerifyDocs,
   onSaveExam,
   onPromote,
+  onWithdrawApplicant,
+  onReactivateApplicant,
   actionLoading,
   formError,
   setFormError,
 }: WorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"general" | "parents">("general");
+  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState("");
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [reactivateLoading, setReactivateLoading] = useState(false);
 
   if (!selectedApp) return null;
+
+  const handleWithdrawSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onWithdrawApplicant || !withdrawReason.trim()) return;
+    setWithdrawLoading(true);
+    const success = await onWithdrawApplicant(withdrawReason);
+    setWithdrawLoading(false);
+    if (success) {
+      setWithdrawDialogOpen(false);
+      setWithdrawReason("");
+    }
+  };
+
+  const handleReactivateSubmit = async () => {
+    if (!onReactivateApplicant) return;
+    setReactivateLoading(true);
+    await onReactivateApplicant();
+    setReactivateLoading(false);
+  };
 
   const clearError = () => {
     if (formError) {
@@ -240,6 +274,17 @@ export default function ApplicantWorkspace({
               {selectedApp.firstName} {selectedApp.lastName}
             </DialogTitle>
           </div>
+          {selectedApp.status !== "ADMITTED" && selectedApp.status !== "REJECTED" && selectedApp.status !== "WITHDRAWN" && onWithdrawApplicant && (
+            <Button
+              type="button"
+              variant="outlined"
+              icon="person_off"
+              className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:border-rose-300 rounded-xl h-10 px-4 text-xs font-bold shrink-0 transition-all duration-300 cursor-pointer"
+              onClick={() => setWithdrawDialogOpen(true)}
+            >
+              Withdraw Application
+            </Button>
+          )}
         </div>
 
         {/* Stepper Wizard Horizontal Path */}
@@ -571,6 +616,21 @@ export default function ApplicantWorkspace({
                       </span>
                     </div>
                   </div>
+                  {verifyForm.nextStatus === "REJECTED" && (
+                    <div className="flex flex-col gap-1.5 mt-3">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Rejection Reason <span className="text-red-500">*</span>
+                      </span>
+                      <textarea
+                        rows={2}
+                        required
+                        value={verifyForm.archiveReason || ""}
+                        onChange={(e) => setVerifyForm((prev: any) => ({ ...prev, archiveReason: e.target.value }))}
+                        placeholder="Specify why the applicant is being rejected..."
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none font-semibold"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {formError && (
@@ -718,6 +778,21 @@ export default function ApplicantWorkspace({
                       </span>
                     </div>
                   </div>
+                  {(examForm.applicationStatus === "REJECTED" || examForm.verdict === "FAIL") && (
+                    <div className="flex flex-col gap-1.5 mt-3">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                        Rejection Reason <span className="text-red-500">*</span>
+                      </span>
+                      <textarea
+                        rows={2}
+                        required
+                        value={examForm.archiveReason || ""}
+                        onChange={(e) => handleExamChange("archiveReason", e.target.value)}
+                        placeholder="Specify why the applicant is being rejected..."
+                        className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none font-semibold"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {formError && (
@@ -859,11 +934,11 @@ export default function ApplicantWorkspace({
                     <div className="grid grid-cols-2 gap-4 pt-1">
                       <div className="p-4 rounded-xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/60 dark:bg-zinc-950/40">
                         <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block">Base Dues</span>
-                        <span className="text-base font-extrabold text-slate-700 dark:text-zinc-300 mt-1.5 block">₹{baseTotal}</span>
+                        <span className="text-base font-extrabold text-slate-700 dark:text-zinc-300 mt-1.5 block">₹{formatIndianNumber(baseTotal)}</span>
                       </div>
                       <div className="p-4 rounded-xl border border-primary/20 dark:border-sky-500/20 bg-primary/[0.03] dark:bg-sky-500/[0.02]">
                         <span className="text-[9px] font-extrabold uppercase tracking-wider text-primary block">Onboarding Total</span>
-                        <span className="text-base font-black text-primary mt-1.5 block">₹{totalDiscountedFee}</span>
+                        <span className="text-base font-black text-primary mt-1.5 block">₹{formatIndianNumber(totalDiscountedFee)}</span>
                       </div>
                     </div>
                   </div>
@@ -909,8 +984,7 @@ export default function ApplicantWorkspace({
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-slate-400">₹</span>
-                              <input
-                                type="number"
+                              <BaseCurrencyInput
                                 disabled={!inst.checked}
                                 value={String(inst.amount)}
                                 onChange={(e) => handleInstallmentAmountChange(t.id, Number(e.target.value) || 0)}
@@ -936,8 +1010,7 @@ export default function ApplicantWorkspace({
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                         Amount Paid Now
                       </span>
-                      <input
-                        type="number"
+                      <BaseCurrencyInput
                         value={String(promoteForm.amountPaid)}
                         onChange={(e) => handlePromoteChange("amountPaid", e.target.value)}
                         placeholder="e.g. 5000"
@@ -1042,9 +1115,31 @@ export default function ApplicantWorkspace({
                     This applicant did not pass evaluation parameters or document checks. They are stored in the admissions archives logs.
                   </p>
                 </div>
+                {selectedApp.archiveReason && (
+                  <div className="max-w-md mx-auto p-4 rounded-2xl bg-rose-500/5 border border-rose-500/10 text-left space-y-1">
+                    <span className="block text-[9px] font-extrabold uppercase tracking-wider text-rose-500 select-none">
+                      Reason for Rejection
+                    </span>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300 leading-relaxed">
+                      {selectedApp.archiveReason}
+                    </p>
+                  </div>
+                )}
                 <div className="pt-2 flex justify-center gap-3">
+                  {onReactivateApplicant && (
+                    <Button
+                      type="button"
+                      variant="filled"
+                      icon="refresh"
+                      loading={reactivateLoading}
+                      className="bg-primary text-white hover:bg-primary/95 rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/15 cursor-pointer"
+                      onClick={handleReactivateSubmit}
+                    >
+                      Reactivate Applicant
+                    </Button>
+                  )}
                   <DialogClose asChild>
-                    <Button variant="outlined" className="rounded-xl h-11 px-5">
+                    <Button variant="outlined" className="rounded-xl h-11 px-5 font-bold text-xs">
                       Dismiss
                     </Button>
                   </DialogClose>
@@ -1055,7 +1150,7 @@ export default function ApplicantWorkspace({
             {/* STATUS: WITHDRAWN */}
             {selectedApp.status === "WITHDRAWN" && (
               <div className="py-10 text-center space-y-6">
-                <span className="inline-flex items-center justify-center p-5 rounded-full bg-slate-50 text-slate-500 border border-slate-100 shadow-sm">
+                <span className="inline-flex items-center justify-center p-5 rounded-full bg-slate-50 dark:bg-zinc-800/60 text-slate-500 border border-slate-100 dark:border-zinc-800 shadow-sm">
                   <Icon name="person_off" size={48} />
                 </span>
                 <div className="space-y-2 max-w-md mx-auto">
@@ -1066,9 +1161,31 @@ export default function ApplicantWorkspace({
                     The parent/candidate withdrew the admission inquiry. Stored in archives list.
                   </p>
                 </div>
+                {selectedApp.archiveReason && (
+                  <div className="max-w-md mx-auto p-4 rounded-2xl bg-slate-500/5 border border-slate-500/10 text-left space-y-1">
+                    <span className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 select-none">
+                      Reason for Withdrawal
+                    </span>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300 leading-relaxed">
+                      {selectedApp.archiveReason}
+                    </p>
+                  </div>
+                )}
                 <div className="pt-2 flex justify-center gap-3">
+                  {onReactivateApplicant && (
+                    <Button
+                      type="button"
+                      variant="filled"
+                      icon="refresh"
+                      loading={reactivateLoading}
+                      className="bg-primary text-white hover:bg-primary/95 rounded-xl h-11 px-6 font-bold shadow-md shadow-primary/15 cursor-pointer"
+                      onClick={handleReactivateSubmit}
+                    >
+                      Reactivate Applicant
+                    </Button>
+                  )}
                   <DialogClose asChild>
-                    <Button variant="outlined" className="rounded-xl h-11 px-5">
+                    <Button variant="outlined" className="rounded-xl h-11 px-5 font-bold text-xs">
                       Dismiss
                     </Button>
                   </DialogClose>
@@ -1078,6 +1195,54 @@ export default function ApplicantWorkspace({
           </div>
         </div>
       </DialogContent>
+
+      {/* Withdraw Confirmation Dialog */}
+      <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>
+        <DialogContent className="max-w-[400px] rounded-3xl bg-white dark:bg-zinc-900 p-6 border border-slate-100 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] focus:outline-none">
+          <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+            <DialogTitle className="text-base font-extrabold text-slate-900 dark:text-zinc-55 tracking-tight flex items-center gap-2">
+              <Icon name="person_off" className="text-rose-500" size={18} />
+              Withdraw Application?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
+              This will move the candidate to the archive list as Withdrawn.
+            </DialogDescription>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
+                Reason for Withdrawal <span className="text-red-500">*</span>
+              </span>
+              <textarea
+                rows={3}
+                required
+                value={withdrawReason}
+                onChange={(e) => setWithdrawReason(e.target.value)}
+                placeholder="e.g. Admitted to another school, relocations..."
+                className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 dark:text-zinc-200 transition-all resize-none font-semibold"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={() => {
+                  setWithdrawDialogOpen(false);
+                  setWithdrawReason("");
+                }}
+                className="rounded-xl h-10 px-4 font-bold text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                loading={withdrawLoading}
+                className="rounded-xl h-10 px-4 font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white border-0 shadow-sm"
+              >
+                Withdraw Now
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

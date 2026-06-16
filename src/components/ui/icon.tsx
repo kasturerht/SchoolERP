@@ -62,7 +62,10 @@ import {
   X,
   AlertTriangle,
   Printer,
-  Copy
+  Copy,
+  Info,
+  ArrowRight,
+  Wallet
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -149,6 +152,9 @@ const iconMap: Record<string, LucideIcon> = {
   print: Printer,
   copy: Copy,
   content_copy: Copy,
+  info: Info,
+  arrow_forward: ArrowRight,
+  account_balance_wallet: Wallet,
 };
 
 export function Icon({

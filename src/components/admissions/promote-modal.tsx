@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } fr
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { BaseCurrencyInput } from "@/components/ui/base-currency-input";
+import { formatIndianNumber } from "@/lib/utils-format";
 
 interface Section {
   id: string;
@@ -216,7 +218,7 @@ export default function PromoteModal({
                   Class Base Total
                 </label>
                 <div className="flex items-center justify-center h-12 rounded-xl bg-slate-100/50 dark:bg-zinc-950/40 border border-slate-200/60 dark:border-zinc-800/80 text-sm font-extrabold text-slate-700 dark:text-zinc-300 select-none">
-                  ₹{baseTotal}
+                  ₹{formatIndianNumber(baseTotal)}
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 w-full">
@@ -224,7 +226,7 @@ export default function PromoteModal({
                   Onboarding Total
                 </label>
                 <div className="flex items-center justify-center h-12 rounded-xl bg-primary/5 dark:bg-sky-500/[0.03] border border-primary/20 dark:border-sky-500/20 text-sm font-black text-primary dark:text-sky-400 select-none">
-                  ₹{activeInstallmentsTotal}
+                  ₹{formatIndianNumber(activeInstallmentsTotal)}
                 </div>
               </div>
             </div>
@@ -273,8 +275,7 @@ export default function PromoteModal({
 
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-slate-400">₹</span>
-                          <input
-                            type="number"
+                          <BaseCurrencyInput
                             disabled={!inst.checked}
                             value={String(inst.amount)}
                             onChange={(e) => handleInstallmentAmountChange(index, Number(e.target.value) || 0)}
@@ -301,8 +302,7 @@ export default function PromoteModal({
                 <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                   Amount Paid Now
                 </label>
-                <input
-                  type="number"
+                <BaseCurrencyInput
                   value={String(promoteForm.amountPaid)}
                   onChange={(e) => handleFormChange("amountPaid", e.target.value)}
                   placeholder="e.g. 5000"

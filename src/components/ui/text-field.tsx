@@ -154,7 +154,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         <div className={cn("flex flex-col gap-1.5", fullWidth && "w-full", className)}>
           <span
             className={cn(
-              "text-[11px] font-black tracking-wider uppercase text-slate-500 dark:text-slate-400 px-0.5 select-none",
+              "text-[11px] font-bold text-slate-500 dark:text-slate-400 px-0.5 select-none",
               disabled && "opacity-50"
             )}
           >

@@ -14,6 +14,7 @@ import {
   PAYMENT_METHOD_LABELS,
   type CreateFeePaymentInput,
 } from "@/lib/validations/fee-payment";
+import { BaseCurrencyInput } from "@/components/ui/base-currency-input";
 
 interface PaymentFormProps {
   pendingAmount: number;
@@ -105,12 +106,8 @@ export function PaymentForm({
           <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
             ₹
           </span>
-          <input
+          <BaseCurrencyInput
             id="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            max={pendingAmount}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="w-full rounded-xl border border-slate-200/50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 focus:bg-white dark:focus:bg-slate-900 pl-8.5 pr-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/5 dark:focus:ring-white/5 transition-all duration-250 font-bold"

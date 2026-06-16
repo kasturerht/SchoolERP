@@ -26,13 +26,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return apiError("BAD_REQUEST", "Invalid JSON body", 400);
   }
 
-  const { examDate, maxMarks, marksObtained, verdict, notes, applicationStatus } = body as {
+  const { examDate, maxMarks, marksObtained, verdict, notes, applicationStatus, archiveReason } = body as {
     examDate: string;
     maxMarks: number;
     marksObtained?: number;
     verdict: "PENDING" | "PASS" | "FAIL" | "BORDERLINE";
     notes?: string;
     applicationStatus?: "TEST_SCHEDULED" | "SHORTLISTED" | "REJECTED";
+    archiveReason?: string;
   };
 
   if (!examDate || maxMarks === undefined || !verdict) {
@@ -82,10 +83,15 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       // Update application status
       const nextStatus = applicationStatus || (verdict === "PASS" ? "SHORTLISTED" : "TEST_SCHEDULED");
+      const dataToUpdate: Record<string, any> = { status: nextStatus };
+      if (nextStatus === "REJECTED") {
+        dataToUpdate.statusBeforeArchive = application.status;
+        dataToUpdate.archiveReason = archiveReason || null;
+      }
       
       const app = await tx.admissionApplication.update({
         where: { id },
-        data: { status: nextStatus },
+        data: dataToUpdate,
         include: {
           documents: true,
           examResult: true,

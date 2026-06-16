@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { DiscardConfirmDialog } from "@/components/ui/discard-confirm-dialog";
+import { BaseCurrencyInput } from "@/components/ui/base-currency-input";
 
 interface ClassItem {
   id: string;
@@ -639,9 +640,7 @@ export default function InquiryModal({
                       <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
                         Amount Paid Upfront (₹)
                       </label>
-                      <input
-                        type="number"
-                        min="0"
+                      <BaseCurrencyInput
                         value={expressForm.amountPaid || ""}
                         onChange={(e) => handleExpressFieldChange("amountPaid", Number(e.target.value))}
                         placeholder="e.g. 5000"

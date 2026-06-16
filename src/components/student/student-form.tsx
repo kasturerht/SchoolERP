@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Select,
   SelectTrigger,
@@ -855,9 +856,8 @@ export function StudentForm({ mode, initialData }: StudentFormProps) {
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <TextField
+                        <CurrencyInput
                           label="Amount Paid"
-                          type="number"
                           value={amountPaid}
                           onChange={(e) => setAmountPaid(e.target.value)}
                           error={errors.amountPaid}

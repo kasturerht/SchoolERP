@@ -315,20 +315,20 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
     await page.waitForSelector("text=Fees & Installment Plans");
 
     // Configure Tuition fee row
-    await page.click("button:has-text('Add Fee Row')");
+    await page.click("button:has-text('Add Fee Item')");
     await page.fill("input[placeholder='Fee name (e.g. Tuition)']", "Tuition");
     await page.fill("input[placeholder='Amount (₹)']", "20000");
 
     // Configure Installment 1
     await page.click("button:has-text('Add Installment')");
     await page.fill("input[placeholder='e.g. Admission / Term 1'] >> nth=0", "Term 1 Dues");
-    await page.fill("input[placeholder='e.g. 15000'] >> nth=0", "10000");
+    await page.fill("input[placeholder='e.g. 15,000'] >> nth=0", "10000");
     await page.fill("label:has-text('Due Date') + input >> nth=0", "2026-09-01");
 
     // Configure Installment 2
     await page.click("button:has-text('Add Installment')");
     await page.fill("input[placeholder='e.g. Admission / Term 1'] >> nth=1", "Term 2 Dues");
-    await page.fill("input[placeholder='e.g. 15000'] >> nth=1", "10000");
+    await page.fill("input[placeholder='e.g. 15,000'] >> nth=1", "10000");
     await page.fill("label:has-text('Due Date') + input >> nth=1", "2026-12-01");
 
     // Finish and activate class

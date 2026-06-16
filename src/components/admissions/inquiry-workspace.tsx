@@ -6,6 +6,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { BaseCurrencyInput } from "@/components/ui/base-currency-input";
 
 interface FollowUp {
   id: string;
@@ -417,9 +418,7 @@ export default function InquiryWorkspace({
                         <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-0.5 select-none">
                           Amount Paid Upfront (₹)
                         </label>
-                        <input
-                          type="number"
-                          min="0"
+                        <BaseCurrencyInput
                           value={expressForm.amountPaid || ""}
                           onChange={(e) => handleExpressFieldChange("amountPaid", Number(e.target.value))}
                           placeholder="e.g. 5000"

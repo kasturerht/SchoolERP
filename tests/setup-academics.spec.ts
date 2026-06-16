@@ -205,13 +205,13 @@ test.describe("Setup & Academics Module E2E", () => {
 
     // Fees & Installments tab
     await page.waitForSelector("text=Fees & Installment Plans");
-    await page.click("button:has-text('Add Fee Row')");
+    await page.click("button:has-text('Add Fee Item')");
     await page.fill("input[placeholder='Fee name (e.g. Tuition)']", "Tuition");
     await page.fill("input[placeholder='Amount (₹)']", "15000");
 
     await page.click("button:has-text('Add Installment')");
     await page.fill("input[placeholder='e.g. Admission / Term 1']", "Term 1");
-    await page.fill("input[placeholder='e.g. 15000']", "15000");
+    await page.fill("input[placeholder='e.g. 15,000']", "15000");
     await page.fill("label:has-text('Due Date') + input", "2026-09-01");
 
     // Finish & Activate Class

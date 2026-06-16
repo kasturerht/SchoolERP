@@ -60,6 +60,27 @@ export const createClassSchema = z.object({
   fees: z.array(inlineFeeSchema).default([]),
   installments: z.array(inlineInstallmentSchema).default([]),
   status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
+}).refine((data) => {
+  if (!data.installments) return true;
+  const groups: Record<string, typeof data.installments> = {};
+  for (const inst of data.installments) {
+    if (!groups[inst.termType]) groups[inst.termType] = [];
+    groups[inst.termType].push(inst);
+  }
+  for (const termType in groups) {
+    const list = groups[termType];
+    for (let i = 1; i < list.length; i++) {
+      const prevDate = new Date(list[i - 1].dueDate);
+      const currDate = new Date(list[i].dueDate);
+      if (!isNaN(prevDate.getTime()) && !isNaN(currDate.getTime())) {
+        if (currDate < prevDate) return false;
+      }
+    }
+  }
+  return true;
+}, {
+  message: "Installment due dates must be in chronological order (e.g. Installment 2 cannot be before Installment 1)",
+  path: ["installments"],
 });
 
 // For update, subjects are expressed as an array of { id } (keep) or { subjectMasterId } (add new)
@@ -87,6 +108,27 @@ export const updateClassSchema = z.object({
   fees: z.array(inlineFeeSchema).optional(),
   installments: z.array(inlineInstallmentSchema).optional(),
   status: z.enum(["DRAFT", "ACTIVE"]).optional(),
+}).refine((data) => {
+  if (!data.installments) return true;
+  const groups: Record<string, typeof data.installments> = {};
+  for (const inst of data.installments) {
+    if (!groups[inst.termType]) groups[inst.termType] = [];
+    groups[inst.termType].push(inst);
+  }
+  for (const termType in groups) {
+    const list = groups[termType];
+    for (let i = 1; i < list.length; i++) {
+      const prevDate = new Date(list[i - 1].dueDate);
+      const currDate = new Date(list[i].dueDate);
+      if (!isNaN(prevDate.getTime()) && !isNaN(currDate.getTime())) {
+        if (currDate < prevDate) return false;
+      }
+    }
+  }
+  return true;
+}, {
+  message: "Installment due dates must be in chronological order (e.g. Installment 2 cannot be before Installment 1)",
+  path: ["installments"],
 });
 
 export type CreateClassInput = z.infer<typeof createClassSchema>;

@@ -26,10 +26,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return apiError("BAD_REQUEST", "Invalid JSON body", 400);
   }
 
-  const { documents, applicationStatus, verificationNotes } = body as {
+  const { documents, applicationStatus, verificationNotes, archiveReason } = body as {
     documents?: { id: string; status: "PENDING" | "VERIFIED" | "REJECTED"; remarks?: string }[];
     applicationStatus?: "DOCUMENT_VERIFICATION" | "SHORTLISTED" | "REJECTED" | "TEST_SCHEDULED";
     verificationNotes?: string;
+    archiveReason?: string;
   };
 
   try {
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       const dataToUpdate: Record<string, any> = {};
       if (applicationStatus) {
         dataToUpdate.status = applicationStatus;
+        if (applicationStatus === "REJECTED") {
+          dataToUpdate.statusBeforeArchive = application.status;
+          dataToUpdate.archiveReason = archiveReason || null;
+        }
       }
       if (verificationNotes !== undefined) {
         dataToUpdate.verificationNotes = verificationNotes;
