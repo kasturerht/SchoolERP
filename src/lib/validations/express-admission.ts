@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { requiredPhoneSchema } from "./phone";
+
 
 const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
 
@@ -65,10 +67,7 @@ export const expressCreateSchema = z.object({
     .string()
     .min(1, "Parent name is required")
     .max(100, "Parent name must be at most 100 characters"),
-  parentPhone: z
-    .string()
-    .min(1, "Parent phone number is required")
-    .max(20, "Phone number must be at most 20 characters"),
+  parentPhone: requiredPhoneSchema,
   parentEmail: z
     .string()
     .email("Invalid email address")

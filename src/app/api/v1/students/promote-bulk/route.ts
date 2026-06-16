@@ -36,12 +36,24 @@ export async function POST(req: NextRequest) {
 
     const { studentIds, targetSectionId, targetAcademicYearId, discountPercent, termType } = parsed.data;
 
-    // 1. Verify target section and class exist
+    // 1. Verify target section and class exist in caller's organization context
     const targetSection = await prisma.section.findFirst({
-      where: { id: targetSectionId },
+      where: {
+        id: targetSectionId,
+        class: { organizationId: ctx.organizationId }
+      },
       include: { class: true },
     });
     if (!targetSection) return apiNotFound("Target Section");
+
+    // Verify target academic year belongs to organization
+    const targetAY = await prisma.academicYear.findFirst({
+      where: {
+        id: targetAcademicYearId,
+        organizationId: ctx.organizationId
+      }
+    });
+    if (!targetAY) return apiNotFound("Target Academic Year");
 
     // 2. Process promotions in a single transaction
     const results = await prisma.$transaction(async (tx) => {

@@ -115,7 +115,7 @@ export function SnackbarProvider({ children }: { children: React.ReactNode }) {
   return (
     <SnackbarContext.Provider value={{ show }}>
       {children}
-      <div className="fixed bottom-4 left-4 right-4 md:left-6 md:right-auto z-[9999] flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 left-4 md:left-auto md:right-6 md:bottom-6 z-[9999] flex flex-col gap-2 items-end">
         {messages.map((msg) => (
           <SnackbarItem key={msg.id} message={msg} onDismiss={dismiss} />
         ))}

@@ -240,7 +240,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
     
     // 2. Promotion modal details
     // Verify the installment templates list is rendered
-    await expect(page.locator("h4:has-text('Fee Installments List')")).toBeVisible();
+    await expect(page.locator("span:has-text('Fee Installments Schedule')")).toBeVisible();
     await expect(page.locator("text=Installment 1")).toBeVisible();
     await expect(page.locator("text=Installment 2")).toBeVisible();
     await expect(page.locator("text=Installment 3")).toBeVisible();
@@ -262,7 +262,7 @@ test.describe("Dynamic Fee Billing & Ledger System E2E", () => {
     const promoteResponsePromise = page.waitForResponse(
       (response) => response.url().includes("/promote") && response.status() === 201
     );
-    await page.click("button[type='submit']:has-text('Confirm Promotion')");
+    await page.click("button[type='submit']:has-text('Promote Candidate to Student')");
     await promoteResponsePromise;
 
     // Verify student created in database

@@ -109,10 +109,23 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
       });
     }
 
-    // Clean up any old test student
-    await prisma.student.deleteMany({
+    // Clean up any old test student references to avoid foreign key violations
+    const oldStudent = await prisma.student.findFirst({
       where: { admissionNo: "ADM-TEST-12345", branchId: branch.id }
     });
+    if (oldStudent) {
+      await prisma.feePayment.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.invoiceItem.deleteMany({ where: { invoice: { studentId: oldStudent.id } } });
+      await prisma.invoice.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.studentEnrollment.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.studentParent.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.leavingCertificate.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.studentTransport.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.bookIssue.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.mark.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.studentAttendance.deleteMany({ where: { studentId: oldStudent.id } });
+      await prisma.student.delete({ where: { id: oldStudent.id } });
+    }
 
     // Seed/find related structures for Phase 3 testing
     const subject = await prisma.subject.upsert({
@@ -424,7 +437,7 @@ test.describe("Student Information System - Admin Profile & Directory Flow", () 
 
     // Click submit, should trigger PENDING_DUES warning block
     const submitBtn = page.locator("#lc-submit-btn");
-    await submitBtn.click();
+    await submitBtn.click({ force: true });
 
     // Verify warning text
     await expect(page.locator("text=Outstanding Dues Warning")).toBeVisible();

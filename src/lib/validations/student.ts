@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { requiredPhoneSchema, optionalPhoneSchema } from "./phone";
+
 
 export const BLOOD_GROUPS = [
   "A+",
@@ -62,16 +64,13 @@ export const createStudentSchema = z.object({
   address: z.string().min(1, "Address is required").max(500),
   pincode: z.string().min(1, "Pincode is required").max(10),
   previousSchool: z.string().max(200).optional().or(z.literal("")),
-  emergencyContact1: z
-    .string()
-    .min(1, "Emergency contact 1 is required")
-    .max(20),
-  emergencyContact2: z.string().max(20).optional().or(z.literal("")),
+  emergencyContact1: requiredPhoneSchema,
+  emergencyContact2: optionalPhoneSchema,
   idType: z.string().min(1, "ID type is required"),
   idNumber: z.string().min(1, "ID number is required").max(50),
   guardianName: z.string().max(100).optional().or(z.literal("")),
   fatherName: z.string().max(100).optional().or(z.literal("")),
-  fatherPhone: z.string().max(20).optional().or(z.literal("")),
+  fatherPhone: optionalPhoneSchema,
   fatherEmail: z
     .string()
     .email("Invalid email address")
@@ -79,7 +78,7 @@ export const createStudentSchema = z.object({
     .or(z.literal("")),
   fatherOccupation: z.string().max(100).optional().or(z.literal("")),
   motherName: z.string().max(100).optional().or(z.literal("")),
-  motherPhone: z.string().max(20).optional().or(z.literal("")),
+  motherPhone: optionalPhoneSchema,
   motherEmail: z
     .string()
     .email("Invalid email address")
@@ -127,17 +126,17 @@ export const updateStudentSchema = z.object({
   address: z.string().max(500).optional().or(z.literal("")),
   pincode: z.string().max(10).optional().or(z.literal("")),
   previousSchool: z.string().max(200).optional().or(z.literal("")),
-  emergencyContact1: z.string().max(20).optional().or(z.literal("")),
-  emergencyContact2: z.string().max(20).optional().or(z.literal("")),
+  emergencyContact1: optionalPhoneSchema,
+  emergencyContact2: optionalPhoneSchema,
   idType: z.string().optional().or(z.literal("")),
   idNumber: z.string().max(50).optional().or(z.literal("")),
   guardianName: z.string().max(100).optional().or(z.literal("")),
   fatherName: z.string().max(100).optional().or(z.literal("")),
-  fatherPhone: z.string().max(20).optional().or(z.literal("")),
+  fatherPhone: optionalPhoneSchema,
   fatherEmail: z.string().email().optional().or(z.literal("")),
   fatherOccupation: z.string().max(100).optional().or(z.literal("")),
   motherName: z.string().max(100).optional().or(z.literal("")),
-  motherPhone: z.string().max(20).optional().or(z.literal("")),
+  motherPhone: optionalPhoneSchema,
   motherEmail: z.string().email().optional().or(z.literal("")),
   motherOccupation: z.string().max(100).optional().or(z.literal("")),
   admissionDate: z.string().optional().or(z.literal("")),

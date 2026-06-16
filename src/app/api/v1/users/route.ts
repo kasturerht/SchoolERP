@@ -114,6 +114,13 @@ export async function POST(req: NextRequest) {
     return apiError("FORBIDDEN", "Cannot create a SUPER_ADMIN user", 403);
   }
 
+  // Restrict assigning SCHOOL_ADMIN role to only SUPER_ADMIN or SCHOOL_ADMIN callers
+  if (targetRole.name === "SCHOOL_ADMIN") {
+    if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN") {
+      return apiError("FORBIDDEN", "Insufficient privileges to assign the SCHOOL_ADMIN role", 403);
+    }
+  }
+
   // Restrict branch-scoped roles from creating users in another branch
   if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && branchId !== ctx.branchId) {
     return apiError("FORBIDDEN", "Cannot create users in another branch", 403);

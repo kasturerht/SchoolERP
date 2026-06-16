@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { optionalPhoneSchema } from "./phone";
+
 
 const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
 
@@ -10,7 +12,7 @@ export const createStaffSchema = z.object({
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
-  phone: z.string().max(20, "Phone must be at most 20 characters").optional().or(z.literal("")),
+  phone: optionalPhoneSchema,
   roleId: z.string().min(1, "Role is required"),
   dateOfBirth: z.string().optional().or(z.literal("")),
   gender: z.enum(GENDERS).optional().or(z.literal("")),
@@ -52,7 +54,7 @@ export const updateStaffSchema = z.object({
     .max(100, "Name must be at most 100 characters")
     .optional(),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
-  phone: z.string().max(20, "Phone must be at most 20 characters").optional().or(z.literal("")),
+  phone: optionalPhoneSchema,
   roleId: z.string().optional(),
   dateOfBirth: z.string().optional().or(z.literal("")),
   gender: z.enum(GENDERS).optional().or(z.literal("")),

@@ -1,7 +1,35 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/api-helpers";
+import { getAdminAuth } from "@/lib/firebase-admin";
 import crypto from "crypto";
+
+async function verifyFirebasePassword(email: string, password?: string): Promise<boolean> {
+  if (!password) return false;
+  try {
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    if (!apiKey) {
+      console.warn("NEXT_PUBLIC_FIREBASE_API_KEY is not defined.");
+      return false;
+    }
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    });
+    return res.ok;
+  } catch (error) {
+    console.error("Firebase auth REST API error:", error);
+    return false;
+  }
+}
+
+function signToken(payload: any, secret: string): string {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", secret).update(`${header}.${data}`).digest("base64url");
+  return `${header}.${data}.${signature}`;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,6 +37,9 @@ export async function POST(req: NextRequest) {
 
     if (!email) {
       return apiError("VALIDATION_ERROR", "Email is required", 400);
+    }
+    if (!password) {
+      return apiError("VALIDATION_ERROR", "Password is required", 400);
     }
 
     // Normalized email
@@ -46,8 +77,45 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // If user does not exist, check if there are any students with this fatherEmail or motherEmail
-    if (!user) {
+    if (user) {
+      // Check if user is a parent
+      if (!user.parent) {
+        return apiError("FORBIDDEN", "User exists but is not linked to a parent profile.", 403);
+      }
+
+      // Check if user is active
+      if (!user.isActive) {
+        return apiError("FORBIDDEN", "User account is suspended.", 403);
+      }
+
+      const isMockUser = user.firebaseUid.startsWith("parent-mock-");
+      if (isMockUser) {
+        // Provision Firebase account on-the-fly using the provided password
+        const adminAuth = getAdminAuth();
+        try {
+          const fbUser = await adminAuth.createUser({
+            email: normEmail,
+            password: password,
+            displayName: user.name,
+          });
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { firebaseUid: fbUser.uid },
+          });
+          user.firebaseUid = fbUser.uid;
+        } catch (err: any) {
+          console.error("Failed to provision Firebase account on-the-fly for parent:", err);
+          return apiError("SERVER_ERROR", "Authentication setup failed.", 500);
+        }
+      } else {
+        // Verify credentials with Firebase Auth REST API
+        const valid = await verifyFirebasePassword(normEmail, password);
+        if (!valid) {
+          return apiError("UNAUTHORIZED", "Invalid email or password", 401);
+        }
+      }
+    } else {
+      // User does not exist, check if there are matching students
       const matchingStudents = await prisma.student.findMany({
         where: {
           OR: [
@@ -74,8 +142,7 @@ export async function POST(req: NextRequest) {
         return apiError("NOT_FOUND", "No student records found with this parent email.", 404);
       }
 
-      // We have matching students! Let's dynamically provision a Parent User account.
-      // 1. Find the PARENT role in the database
+      // Dynamically provision Firebase account and Parent User account.
       const parentRole = await prisma.role.findFirst({
         where: { name: "PARENT" },
       });
@@ -84,7 +151,6 @@ export async function POST(req: NextRequest) {
         return apiError("SERVER_ERROR", "PARENT role is not configured in the system.", 500);
       }
 
-      // Use the first student's branchId and organizationId
       const targetStudent = matchingStudents[0];
       const branch = await prisma.branch.findUnique({
         where: { id: targetStudent.branchId },
@@ -100,14 +166,28 @@ export async function POST(req: NextRequest) {
         ? targetStudent.fatherName || "Father"
         : targetStudent.motherName || "Mother";
 
-      // 2. Create the User in database
-      // Generate a mock firebaseUid since it is unique and required
-      const dummyUid = `parent-mock-${crypto.randomUUID()}`;
+      // Create Firebase Auth account
+      const adminAuth = getAdminAuth();
+      let fbUser;
+      try {
+        fbUser = await adminAuth.createUser({
+          email: normEmail,
+          password: password,
+          displayName: parentName,
+        });
+      } catch (err: any) {
+        if (err.code === "auth/email-already-exists") {
+          return apiError("CONFLICT", "Email is already registered in the auth system", 409);
+        }
+        console.error("Firebase parent createUser error:", err);
+        return apiError("INTERNAL_ERROR", "Failed to create auth account", 500);
+      }
+
       user = await prisma.user.create({
         data: {
           organizationId: branch.organizationId,
           branchId: targetStudent.branchId,
-          firebaseUid: dummyUid,
+          firebaseUid: fbUser.uid,
           email: normEmail,
           name: parentName,
           roleId: parentRole.id,
@@ -142,7 +222,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 3. Create the Parent row linked to User
       const newParent = await prisma.parent.create({
         data: {
           userId: user.id,
@@ -150,7 +229,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 4. Create StudentParent links
       for (const student of matchingStudents) {
         await prisma.studentParent.create({
           data: {
@@ -162,7 +240,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Reload user with relationships loaded
+      // Reload user
       const reloadedUser = await prisma.user.findUnique({
         where: { id: user.id },
         include: {
@@ -219,7 +297,8 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    const token = `parent-mock-token-${user.id}`;
+    const secret = process.env.AUTH_SECRET || "auth_secret_fallback";
+    const token = signToken({ userId: user.id, role: "PARENT", parentId: user.parent.id }, secret);
 
     return apiSuccess({
       token,

@@ -210,6 +210,13 @@ export default function ApplicantWorkspace({
     );
   };
 
+  const handleInstallmentCheckChange = (templateId: string, checked: boolean) => {
+    clearError();
+    setCustomInstallments((prev: CustomInstallment[]) =>
+      prev.map((inst) => (inst.templateId === templateId ? { ...inst, checked } : inst))
+    );
+  };
+
   const baseTotal = installmentTemplates.reduce((acc, curr) => acc + Number(curr.amount), 0);
   const totalDiscountedFee = Math.max(0, Math.round(baseTotal * (1 - (promoteForm.discountPercent || 0) / 100)));
 
@@ -871,23 +878,28 @@ export default function ApplicantWorkspace({
                     </h4>
 
                     <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin">
-                      {installmentTemplates.map((t, index) => {
-                        let amount = Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100));
-                        if (index === installmentTemplates.length - 1) {
-                          const previousSum = installmentTemplates.slice(0, -1).reduce((sum, temp) => {
-                            return sum + Math.round(Number(temp.amount) * (1 - (promoteForm.discountPercent || 0) / 100));
-                          }, 0);
-                          amount = Math.max(0, totalDiscountedFee - previousSum);
-                        }
+                      {installmentTemplates.map((t) => {
+                        const inst = customInstallments.find((ci) => ci.templateId === t.id) || {
+                          checked: true,
+                          amount: Math.round(Number(t.amount) * (1 - (promoteForm.discountPercent || 0) / 100)),
+                        };
                         return (
                           <div
                             key={t.id}
-                            className="p-3.5 rounded-xl border border-slate-200/60 dark:border-zinc-800 bg-white dark:bg-zinc-950/50 flex items-center justify-between gap-4 shadow-sm transition-all duration-250 hover:bg-slate-50/50 dark:hover:bg-zinc-850/30"
+                            className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 transition-all duration-250 ${
+                              inst.checked
+                                ? "bg-white dark:bg-zinc-900/60 border-slate-200 dark:border-zinc-800 shadow-sm"
+                                : "bg-slate-50/40 dark:bg-zinc-950/10 border-slate-100 dark:border-zinc-900 opacity-60"
+                            }`}
                           >
                             <div className="flex items-center gap-3">
-                              <span className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800 text-slate-500 dark:text-zinc-400">
-                                <Icon name="calendar_today" size={14} />
-                              </span>
+                              <input
+                                type="checkbox"
+                                id={`inst-check-${t.id}`}
+                                checked={inst.checked}
+                                onChange={(e) => handleInstallmentCheckChange(t.id, e.target.checked)}
+                                className="rounded text-primary focus:ring-primary/20 w-4.5 h-4.5 border-slate-300 dark:border-zinc-800"
+                              />
                               <div>
                                 <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">{t.name}</span>
                                 <span className="text-[9px] text-slate-400 dark:text-zinc-500 block mt-1">
@@ -896,9 +908,14 @@ export default function ApplicantWorkspace({
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-extrabold text-slate-800 dark:text-zinc-100 bg-slate-50 dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-slate-200/50 dark:border-zinc-800 select-none">
-                                ₹{amount}
-                              </span>
+                              <span className="text-xs font-bold text-slate-400">₹</span>
+                              <input
+                                type="number"
+                                disabled={!inst.checked}
+                                value={String(inst.amount)}
+                                onChange={(e) => handleInstallmentAmountChange(t.id, Number(e.target.value) || 0)}
+                                className="w-28 h-9 text-xs font-bold bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 text-right text-slate-800 dark:text-zinc-200 outline-none focus:border-primary disabled:opacity-50 transition-all duration-300"
+                              />
                             </div>
                           </div>
                         );

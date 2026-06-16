@@ -6,6 +6,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useSnackbar } from "@/components/ui/snackbar";
+import { DiscardConfirmDialog } from "@/components/ui/discard-confirm-dialog";
 
 interface ClassItem {
   id: string;
@@ -28,7 +29,7 @@ interface InquiryModalProps {
     notes: string;
   };
   setInquiryForm: (val: any) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent) => Promise<any> | void;
   loading: boolean;
   branchId: string;
   academicYearId: string;
@@ -48,6 +49,8 @@ export default function InquiryModal({
   onSuccess,
 }: InquiryModalProps) {
   const snackbar = useSnackbar();
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [expressAdmit, setExpressAdmit] = useState(false);
   const [sections, setSections] = useState<{ id: string; name: string }[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
@@ -61,6 +64,63 @@ export default function InquiryModal({
     bypassAgeLimit: false,
   });
   const [expressAdmitting, setExpressAdmitting] = useState(false);
+
+  const isFormDirty = () => {
+    return (
+      inquiryForm.studentName !== "" ||
+      inquiryForm.dateOfBirth !== "" ||
+      inquiryForm.gender !== "MALE" ||
+      inquiryForm.classAppliedId !== "" ||
+      inquiryForm.parentName !== "" ||
+      inquiryForm.parentPhone !== "" ||
+      inquiryForm.parentEmail !== "" ||
+      inquiryForm.source !== "WALK_IN" ||
+      inquiryForm.notes !== "" ||
+      (expressAdmit && (
+        expressForm.rollNo !== "" ||
+        Number(expressForm.discountPercent) !== 0 ||
+        Number(expressForm.amountPaid) !== 0
+      ))
+    );
+  };
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      if (isFormDirty()) {
+        setShowDiscardConfirm(true);
+      } else {
+        onOpenChange(false);
+      }
+    } else {
+      onOpenChange(true);
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    setInquiryForm({
+      studentName: "",
+      dateOfBirth: "",
+      gender: "MALE",
+      classAppliedId: "",
+      parentName: "",
+      parentPhone: "",
+      parentEmail: "",
+      source: "WALK_IN",
+      notes: "",
+    });
+    setExpressForm({
+      sectionId: "",
+      rollNo: "",
+      discountPercent: 0,
+      amountPaid: 0,
+      paymentMethod: "CASH",
+      transactionId: "",
+      bypassAgeLimit: false,
+    });
+    setExpressAdmit(false);
+    onOpenChange(false);
+  };
 
   useEffect(() => {
     if (inquiryForm.classAppliedId) {
@@ -82,7 +142,18 @@ export default function InquiryModal({
     }
   }, [inquiryForm.classAppliedId]);
 
+  useEffect(() => {
+    if (!open) {
+      setErrors({});
+    }
+  }, [open]);
+
   const handleChange = (field: string, value: string) => {
+    setErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[field];
+      return copy;
+    });
     setInquiryForm((prev: any) => ({ ...prev, [field]: value }));
   };
 
@@ -92,8 +163,18 @@ export default function InquiryModal({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
     if (!expressAdmit) {
-      onSubmit(e);
+      const result = await onSubmit(e);
+      if (result && !result.success && result.error) {
+        if (result.error.code === "VALIDATION_ERROR" && result.error.details) {
+          const newErrors: Record<string, string> = {};
+          result.error.details.forEach((err: any) => {
+            newErrors[err.field] = err.message;
+          });
+          setErrors(newErrors);
+        }
+      }
       return;
     }
 
@@ -139,7 +220,16 @@ export default function InquiryModal({
         snackbar.show("Inquiry logged and student admitted successfully!", "success");
         if (onSuccess) onSuccess();
       } else {
-        snackbar.show(data.error?.message || "Failed to direct admit student.", "error");
+        if (data.error?.code === "VALIDATION_ERROR" && data.error.details) {
+          const newErrors: Record<string, string> = {};
+          data.error.details.forEach((err: any) => {
+            newErrors[err.field] = err.message;
+          });
+          setErrors(newErrors);
+          snackbar.show("Validation failed. Please check highlighted errors.", "error");
+        } else {
+          snackbar.show(data.error?.message || "Failed to direct admit student.", "error");
+        }
       }
     } catch (err) {
       console.error(err);
@@ -150,8 +240,11 @@ export default function InquiryModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
         overlayClassName="fixed left-0 md:left-20 xl:left-[280px] top-20 right-0 bottom-0 inset-auto bg-transparent backdrop-blur-none"
         className="fixed left-0 md:left-20 xl:left-[280px] top-20 right-0 bottom-0 w-auto h-auto max-w-none max-h-none translate-x-0 translate-y-0 rounded-none bg-white dark:bg-zinc-900 border-0 shadow-none flex flex-col p-6 md:p-10 md:py-12 overflow-hidden"
       >
@@ -197,7 +290,7 @@ export default function InquiryModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 {/* Student Name */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.studentName ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Student Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -206,20 +299,37 @@ export default function InquiryModal({
                     value={inquiryForm.studentName}
                     onChange={(e) => handleChange("studentName", e.target.value)}
                     placeholder="e.g. Aditya Kulkarni"
-                    className="w-full h-[52px] px-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    className={`w-full h-[52px] px-5 rounded-2xl border bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      errors.studentName 
+                        ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                        : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                    }`}
                   />
+                  {errors.studentName && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.studentName}
+                    </p>
+                  )}
                 </div>
 
                 {/* Class Applied */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.classAppliedId ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Class Applied <span className="text-red-500">*</span>
                   </label>
                   <Select
                     value={inquiryForm.classAppliedId}
                     onValueChange={(val) => handleChange("classAppliedId", val)}
                   >
-                    <SelectTrigger fullWidth className="h-[52px] px-5 rounded-2xl border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
+                    <SelectTrigger 
+                      fullWidth 
+                      className={`h-[52px] px-5 rounded-2xl bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                        errors.classAppliedId 
+                          ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                          : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                      }`}
+                    >
                       <SelectValue placeholder="Select Class" />
                     </SelectTrigger>
                     <SelectContent>
@@ -230,11 +340,17 @@ export default function InquiryModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.classAppliedId && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.classAppliedId}
+                    </p>
+                  )}
                 </div>
 
                 {/* Date of Birth */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.dateOfBirth ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Date of Birth <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -242,20 +358,37 @@ export default function InquiryModal({
                     required
                     value={inquiryForm.dateOfBirth}
                     onChange={(e) => handleChange("dateOfBirth", e.target.value)}
-                    className="w-full h-[52px] px-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    className={`w-full h-[52px] px-5 rounded-2xl border bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      errors.dateOfBirth 
+                        ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                        : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                    }`}
                   />
+                  {errors.dateOfBirth && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.dateOfBirth}
+                    </p>
+                  )}
                 </div>
 
                 {/* Gender */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.gender ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Gender <span className="text-red-500">*</span>
                   </label>
                   <Select
                     value={inquiryForm.gender}
                     onValueChange={(val) => handleChange("gender", val)}
                   >
-                    <SelectTrigger fullWidth className="h-[52px] px-5 rounded-2xl border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
+                    <SelectTrigger 
+                      fullWidth 
+                      className={`h-[52px] px-5 rounded-2xl bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                        errors.gender 
+                          ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                          : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                      }`}
+                    >
                       <SelectValue placeholder="Select Gender" />
                     </SelectTrigger>
                     <SelectContent>
@@ -264,11 +397,17 @@ export default function InquiryModal({
                       <SelectItem value="OTHER">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                  {errors.gender && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.gender}
+                    </p>
+                  )}
                 </div>
 
                 {/* Parent Name */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.parentName ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Parent / Guardian Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -277,13 +416,23 @@ export default function InquiryModal({
                     value={inquiryForm.parentName}
                     onChange={(e) => handleChange("parentName", e.target.value)}
                     placeholder="e.g. Sanjay Kulkarni"
-                    className="w-full h-[52px] px-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    className={`w-full h-[52px] px-5 rounded-2xl border bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      errors.parentName 
+                        ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                        : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                    }`}
                   />
+                  {errors.parentName && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.parentName}
+                    </p>
+                  )}
                 </div>
 
                 {/* Parent Phone */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.parentPhone ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Parent Phone Number <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -292,13 +441,23 @@ export default function InquiryModal({
                     value={inquiryForm.parentPhone}
                     onChange={(e) => handleChange("parentPhone", e.target.value)}
                     placeholder="10-digit number"
-                    className="w-full h-[52px] px-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    className={`w-full h-[52px] px-5 rounded-2xl border bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      errors.parentPhone 
+                        ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                        : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                    }`}
                   />
+                  {errors.parentPhone && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.parentPhone}
+                    </p>
+                  )}
                 </div>
 
                 {/* Parent Email */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.parentEmail ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Parent Email Address <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -307,20 +466,37 @@ export default function InquiryModal({
                     value={inquiryForm.parentEmail}
                     onChange={(e) => handleChange("parentEmail", e.target.value)}
                     placeholder="e.g. parent@example.com"
-                    className="w-full h-[52px] px-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300"
+                    className={`w-full h-[52px] px-5 rounded-2xl border bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      errors.parentEmail 
+                        ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                        : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                    }`}
                   />
+                  {errors.parentEmail && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.parentEmail}
+                    </p>
+                  )}
                 </div>
 
                 {/* Source */}
                 <div className="flex flex-col gap-2 w-full">
-                  <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                  <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.source ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                     Inquiry Source <span className="text-red-500">*</span>
                   </label>
                   <Select
                     value={inquiryForm.source}
                     onValueChange={(val) => handleChange("source", val)}
                   >
-                    <SelectTrigger fullWidth className="h-[52px] px-5 rounded-2xl border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300">
+                    <SelectTrigger 
+                      fullWidth 
+                      className={`h-[52px] px-5 rounded-2xl bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 ${
+                        errors.source 
+                          ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                          : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                      }`}
+                    >
                       <SelectValue placeholder="Select Source" />
                     </SelectTrigger>
                     <SelectContent>
@@ -332,12 +508,18 @@ export default function InquiryModal({
                       <SelectItem value="OTHER">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                  {errors.source && (
+                    <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {errors.source}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Notes */}
               <div className="flex flex-col gap-2 w-full">
-                <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
+                <label className={`block text-[10.5px] font-extrabold uppercase tracking-wider px-1 select-none ${errors.notes ? "text-error" : "text-slate-400 dark:text-zinc-500"}`}>
                   Intake Conversation Notes
                 </label>
                 <textarea
@@ -345,8 +527,18 @@ export default function InquiryModal({
                   value={inquiryForm.notes}
                   onChange={(e) => handleChange("notes", e.target.value)}
                   placeholder="Log key student details, bus facility requirements, previous syllabus constraints, etc."
-                  className="w-full px-5 py-4 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300 resize-none min-h-[100px]"
+                  className={`w-full px-5 py-4 rounded-2xl border bg-slate-50/30 dark:bg-zinc-950/20 text-sm font-semibold text-slate-800 dark:text-zinc-100 focus:outline-none focus:ring-4 transition-all duration-300 resize-none min-h-[100px] ${
+                    errors.notes 
+                      ? "border-error focus:ring-error/20 focus:border-error focus:bg-white dark:focus:bg-zinc-950" 
+                      : "border-slate-200 dark:border-zinc-800 focus:ring-primary/8 focus:border-primary focus:bg-white dark:focus:bg-zinc-950"
+                  }`}
                 />
+                {errors.notes && (
+                  <p className="text-[11px] text-error font-semibold px-1 mt-0.5 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">error</span>
+                    {errors.notes}
+                  </p>
+                )}
               </div>
 
               {/* Direct Admit Toggle Switch */}
@@ -513,11 +705,14 @@ export default function InquiryModal({
 
             {/* Submit Actions */}
             <div className="flex justify-end gap-4 pt-5 border-t border-slate-100 dark:border-zinc-800 shrink-0">
-            <DialogClose asChild>
-              <Button variant="outlined" className="rounded-2xl h-12 px-6 font-bold text-sm">
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={() => handleOpenChange(false)}
+                className="rounded-2xl h-12 px-6 font-bold text-sm cursor-pointer"
+              >
                 Cancel
               </Button>
-            </DialogClose>
             <Button
               type="submit"
               variant="filled"
@@ -536,5 +731,11 @@ export default function InquiryModal({
         </div>
       </DialogContent>
     </Dialog>
+      <DiscardConfirmDialog
+        open={showDiscardConfirm}
+        onClose={() => setShowDiscardConfirm(false)}
+        onConfirm={handleConfirmDiscard}
+      />
+    </>
   );
 }

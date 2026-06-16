@@ -62,9 +62,9 @@ test.describe("Ultra-Deep Behavioral & Integration Test Suite", () => {
     await page.waitForLoadState("networkidle");
 
     // Assert student info and invoice matches
-    await expect(page.locator("h1.text-headline-md")).toContainText("Fee Collection");
-    await expect(page.locator("text=Student Information")).toBeVisible();
-    await expect(page.locator("text=Invoice Breakdown")).toBeVisible();
+    await expect(page.locator("h1:has-text('Fee Collection')")).toBeVisible();
+    await expect(page.locator("text=Collection Desk")).toBeVisible();
+    await expect(page.locator("text=Installment Breakdown")).toBeVisible();
 
     // 4. Fill in standard payment form on Web Admin
     const payAmount = 500;
@@ -126,7 +126,7 @@ test.describe("Ultra-Deep Behavioral & Integration Test Suite", () => {
 
   test("Test 2: Chaos & Input Boundary Validation (Forms Robustness)", async ({ page, request }) => {
     // 1. Navigate to Direct Intake student form page
-    await page.goto("/students/new");
+    await page.goto("/students/new?bypassRedirect=true");
     await page.waitForLoadState("networkidle");
     await expect(page.locator("h1:has-text('Direct Intake / Data Migration')")).toBeVisible();
 

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { optionalPhoneSchema } from "./phone";
+
 
 export const createBranchSchema = z.object({
   name: z
@@ -11,7 +13,7 @@ export const createBranchSchema = z.object({
     .max(20, "Code must be at most 20 characters")
     .regex(/^[A-Za-z0-9_-]+$/, "Code must be alphanumeric (hyphens and underscores allowed)"),
   address: z.string().max(500).optional().or(z.literal("")),
-  phone: z.string().max(20).optional().or(z.literal("")),
+  phone: optionalPhoneSchema,
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   hasEntranceTest: z.boolean().optional(),
 });
@@ -29,7 +31,7 @@ export const updateBranchSchema = z.object({
     .regex(/^[A-Za-z0-9_-]+$/, "Code must be alphanumeric (hyphens and underscores allowed)")
     .optional(),
   address: z.string().max(500).optional().or(z.literal("")),
-  phone: z.string().max(20).optional().or(z.literal("")),
+  phone: optionalPhoneSchema,
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   isActive: z.boolean().optional(),
   hasEntranceTest: z.boolean().optional(),

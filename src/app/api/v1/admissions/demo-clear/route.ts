@@ -8,7 +8,7 @@ import { logAction } from "@/lib/audit";
  * POST /api/v1/admissions/demo-clear — Safely delete sandbox demo data
  */
 export async function POST(req: NextRequest) {
-  const denied = await checkApiPermission(req, "admissions", "document_verification");
+  const denied = await checkApiPermission(req, "settings", "manage");
   if (denied) return denied;
 
   const ctx = getTenantContext(req);

@@ -349,25 +349,35 @@ test.describe("Real-World School Operations E2E Simulation Walkthrough", () => {
     for (let i = 0; i < 5; i++) {
       await page.goto("/staff/new");
       await page.waitForLoadState("networkidle");
+      
+      // Step 1: Basic Profile
       await page.fill("label:has-text('Full Name') + input", namesList[i]);
       await page.fill("label:has-text('Email Address') + input", emailsList[i]);
       await page.fill("label:has-text('Phone Number') + input", `999999900${i}`);
+      await page.fill("label:has-text('Date of Birth') + input", "1990-01-01");
+      await page.click("label:has-text('Gender') + button");
+      await clickOption(page, "Male");
       
+      // Navigate to Step 2
+      await page.click("button:has-text('Continue')");
+      
+      // Step 2: Professional Details
       await page.click("label:has-text('Role') + button");
       await clickOption(page, rolesList[i]);
       
       // Auto-filled branch for branch scope if required
       const branchButton = page.locator("label:has-text('Branch') + button");
-      await branchButton.waitFor({ state: "visible", timeout: 10000 });
-      await branchButton.click();
-      await clickOption(page, branchName);
+      if (await branchButton.isVisible()) {
+        await branchButton.click();
+        await clickOption(page, branchName);
+      }
 
-      await page.fill("label:has-text('Join Date') + input", "2026-06-01");
-      await page.fill("label:has-text('Date of Birth') + input", "1990-01-01");
+      await page.fill("label:has-text('Joining Date') + input", "2026-06-01");
       
-      await page.click("label:has-text('Gender') + button");
-      await clickOption(page, "Male");
+      // Navigate to Step 3
+      await page.click("button:has-text('Continue')");
 
+      // Step 3: Security Desk & Permissions Matrix
       // Enable Login account (for Counselor, Accountant, and Teacher 1)
       if (i < 3) {
         await page.click("button[role='switch']");

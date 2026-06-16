@@ -175,7 +175,11 @@ export async function POST(req: NextRequest) {
 
       // 5. Billing generation (copied from promote endpoint)
       const feeStructures = await tx.feeStructure.findMany({
-        where: { classId: data.classAppliedId, termType: data.termType || "FULL_TERM" },
+        where: {
+          classId: data.classAppliedId,
+          academicYearId: data.academicYearId,
+          termType: data.termType || "FULL_TERM",
+        },
         include: { feeCategory: { select: { name: true } } },
       });
 

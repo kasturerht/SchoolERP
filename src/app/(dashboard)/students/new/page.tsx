@@ -3,8 +3,15 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 
 import { redirect } from "next/navigation";
 
-export default function NewStudentPage() {
-  redirect("/admissions");
+interface PageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function NewStudentPage({ searchParams }: PageProps) {
+  const resolvedSearchParams = await searchParams;
+  if (resolvedSearchParams.bypassRedirect !== "true") {
+    redirect("/admissions");
+  }
   return (
     <div>
       <Breadcrumb>

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { requiredPhoneSchema, optionalPhoneSchema } from "./phone";
+
 
 const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
 
@@ -42,10 +44,7 @@ export const createInquirySchema = z.object({
     .string()
     .min(1, "Parent name is required")
     .max(100, "Parent name must be at most 100 characters"),
-  parentPhone: z
-    .string()
-    .min(1, "Parent phone number is required")
-    .max(20, "Phone number must be at most 20 characters"),
+  parentPhone: requiredPhoneSchema,
   parentEmail: z
     .string()
     .email("Invalid email address")
@@ -89,14 +88,11 @@ export const createApplicationSchema = z.object({
   address: z.string().min(1, "Address is required").max(500),
   pincode: z.string().min(1, "Pincode is required").max(10),
   previousSchool: z.string().max(200).optional().or(z.literal("")),
-  emergencyContact: z
-    .string()
-    .min(1, "Emergency contact is required")
-    .max(20),
+  emergencyContact: requiredPhoneSchema,
 
   // Parents details
   fatherName: z.string().max(100).optional().or(z.literal("")),
-  fatherPhone: z.string().max(20).optional().or(z.literal("")),
+  fatherPhone: optionalPhoneSchema,
   fatherEmail: z
     .string()
     .email("Invalid email address")
@@ -104,7 +100,7 @@ export const createApplicationSchema = z.object({
     .or(z.literal("")),
   fatherOccupation: z.string().max(100).optional().or(z.literal("")),
   motherName: z.string().max(100).optional().or(z.literal("")),
-  motherPhone: z.string().max(20).optional().or(z.literal("")),
+  motherPhone: optionalPhoneSchema,
   motherEmail: z
     .string()
     .email("Invalid email address")

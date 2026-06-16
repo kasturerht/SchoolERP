@@ -112,6 +112,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return apiError("FORBIDDEN", "Cannot assign SUPER_ADMIN role", 403);
     }
 
+    // Restrict promoting to SCHOOL_ADMIN role to only SUPER_ADMIN or SCHOOL_ADMIN callers
+    if (targetRole.name === "SCHOOL_ADMIN") {
+      if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN") {
+        return apiError("FORBIDDEN", "Insufficient privileges to assign the SCHOOL_ADMIN role", 403);
+      }
+    }
+
     // Validate branch if changing
     if (branchId) {
       const branch = await prisma.branch.findFirst({

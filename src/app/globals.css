@@ -343,6 +343,9 @@ body {
 }
 
 /* Hide browser default calendar picker icon on date inputs and make the entire input trigger the picker */
+input[type="date"] {
+  position: relative;
+}
 input[type="date"]::-webkit-calendar-picker-indicator {
   background: transparent;
   bottom: 0;

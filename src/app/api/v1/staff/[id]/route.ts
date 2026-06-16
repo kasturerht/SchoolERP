@@ -6,7 +6,7 @@ import {
   apiValidationError,
   apiNotFound,
 } from "@/lib/api-helpers";
-import { checkApiPermission, getTenantContext } from "@/lib/rbac";
+import { checkApiPermission, getTenantContext, getUserPermissions } from "@/lib/rbac";
 import { updateStaffSchema } from "@/lib/validations/staff";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { logAction } from "@/lib/audit";
@@ -201,6 +201,20 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (newUserId) data.userId = newUserId;
 
     if (targetUserId && customPermissions) {
+      // Security Gate: Ensure caller has the permissions they are trying to grant or revoke
+      if (ctx.roleName !== "SUPER_ADMIN" && customPermissions.length > 0) {
+        const callerPerms = await getUserPermissions(ctx.userId, ctx.roleId, ctx.roleName);
+        const permissionsToVerify = await prisma.permission.findMany({
+          where: { id: { in: customPermissions.map(p => p.permissionId) } }
+        });
+        for (const perm of permissionsToVerify) {
+          const permKey = `${perm.module}:${perm.action}`;
+          if (!callerPerms.has(permKey)) {
+            return apiError("FORBIDDEN", `Cannot grant or revoke permission "${permKey}" that you do not possess`, 403);
+          }
+        }
+      }
+
       // Delete existing overrides for this user
       await prisma.userPermission.deleteMany({
         where: { userId: targetUserId }

@@ -941,11 +941,18 @@ export default function AdmissionsPage() {
           notes: "",
         });
         fetchDashboardData();
+        return { success: true };
       } else {
-        snackbar.show(data.error?.message || "Failed to submit inquiry.", "error");
+        if (data.error?.code === "VALIDATION_ERROR") {
+          snackbar.show("Validation failed. Please check highlighted errors.", "error");
+        } else {
+          snackbar.show(data.error?.message || "Failed to submit inquiry.", "error");
+        }
+        return { success: false, error: data.error };
       }
     } catch {
       snackbar.show("Network error.", "error");
+      return { success: false, error: { message: "Network error." } };
     } finally {
       setActionLoading(false);
     }
@@ -990,11 +997,18 @@ export default function AdmissionsPage() {
           classId: "",
         });
         fetchDashboardData();
+        return { success: true };
       } else {
-        snackbar.show(data.error?.message || "Failed to submit application.", "error");
+        if (data.error?.code === "VALIDATION_ERROR") {
+          snackbar.show("Validation failed. Please check highlighted errors.", "error");
+        } else {
+          snackbar.show(data.error?.message || "Failed to submit application.", "error");
+        }
+        return { success: false, error: data.error };
       }
     } catch {
       snackbar.show("Network error.", "error");
+      return { success: false, error: { message: "Network error." } };
     } finally {
       setActionLoading(false);
     }
@@ -1169,7 +1183,12 @@ export default function AdmissionsPage() {
         amountPaid: Number(promoteForm.amountPaid) || undefined,
         paymentMethod: promoteForm.paymentMethod,
         transactionId: promoteForm.transactionId || undefined,
-        installments: undefined,
+        installments: customInstallments
+          .filter((inst) => inst.checked)
+          .map((inst) => ({
+            templateId: inst.templateId,
+            amount: inst.amount,
+          })),
         termType: promoteForm.termType,
       };
       const res = await fetch(`/api/v1/admissions/applications/${selectedApp.id}/promote`, {

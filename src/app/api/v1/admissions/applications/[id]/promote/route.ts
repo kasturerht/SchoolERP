@@ -155,7 +155,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       // Calculate and generate invoices if fee structures exist for this class and student's term type
       const feeStructures = await tx.feeStructure.findMany({
-        where: { classId: application.classId, termType: termType || "FULL_TERM" },
+        where: {
+          classId: application.classId,
+          academicYearId: application.academicYearId,
+          termType: termType || "FULL_TERM",
+        },
         include: { feeCategory: { select: { name: true } } },
       });
 
@@ -222,8 +226,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         });
 
         const totalCustomAmount = targetInstallments.reduce((sum, inst) => sum.plus(inst.amount), new Prisma.Decimal(0));
-        if (!totalCustomAmount.equals(totalDiscountedFee)) {
-          throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of custom installments (₹${totalCustomAmount}) does not match the total discounted fee structures (₹${totalDiscountedFee}).`);
+        if (totalCustomAmount.gt(totalDiscountedFee)) {
+          throw new Error(`INSTALLMENT_AMOUNT_MISMATCH: The sum of custom installments (₹${totalCustomAmount}) exceeds the total discounted fee structures (₹${totalDiscountedFee}).`);
         }
       } else {
         // Query standard class templates from DB

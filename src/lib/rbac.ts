@@ -93,6 +93,21 @@ export async function checkApiPermission(
     );
   }
 
+  // Check if user and organization are active (Instant Revocation Check)
+  const user = await prisma.user.findFirst({
+    where: { id: userId, isActive: true },
+    select: {
+      organization: { select: { isActive: true } }
+    }
+  });
+
+  if (!user || !user.organization.isActive) {
+    return Response.json(
+      { success: false, error: { code: "UNAUTHORIZED", message: "User or organization is suspended" } },
+      { status: 401 }
+    );
+  }
+
   const allowed = await hasPermission(userId, roleId, roleName, module, action);
   if (!allowed) {
     return Response.json(
