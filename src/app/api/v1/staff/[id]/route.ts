@@ -186,6 +186,53 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       }
     }
 
+    // If user already exists and a password reset is requested
+    if (existing.userId && password) {
+      const associatedUser = await prisma.user.findUnique({
+        where: { id: existing.userId },
+        include: { role: true },
+      });
+      if (associatedUser) {
+        // Enforce Role Hierarchy Guard
+        const getRoleWeight = (name: string) => {
+          switch (name) {
+            case "SUPER_ADMIN": return 100;
+            case "SCHOOL_ADMIN": return 90;
+            case "BRANCH_ADMIN": return 80;
+            default: return 10;
+          }
+        };
+        const callerWeight = getRoleWeight(ctx.roleName);
+        const targetWeight = getRoleWeight(associatedUser.role.name);
+        if (ctx.roleName !== "SUPER_ADMIN" && callerWeight <= targetWeight) {
+          return apiError("FORBIDDEN", "Insufficient privileges to modify a user with an equal or higher role level", 403);
+        }
+
+        try {
+          await getAdminAuth().updateUser(associatedUser.firebaseUid, { password });
+          await prisma.user.update({
+            where: { id: associatedUser.id },
+            data: {
+              forcePasswordChange: true,
+              tokenVersion: { increment: 1 },
+            },
+          });
+          await logAction({
+            organizationId: ctx.organizationId,
+            branchId: branchId || existing.branchId,
+            userId: ctx.userId,
+            action: "UPDATE",
+            module: "USERS",
+            entityId: associatedUser.id,
+            details: { context: "STAFF_PASSWORD_RESET" },
+          });
+        } catch (err) {
+          console.error("Firebase staff updateUser password error:", err);
+          return apiError("INTERNAL_ERROR", "Failed to update credentials in authentication server", 500);
+        }
+      }
+    }
+
     const data: Record<string, unknown> = {};
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email || null;

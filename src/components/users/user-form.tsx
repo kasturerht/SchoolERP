@@ -58,6 +58,23 @@ export function UserForm({ mode, initialData }: UserFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
+  function generateRandomPassword() {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let generated = "";
+    for (let i = 0; i < 12; i++) {
+      generated += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setPassword(generated);
+    setShowPassword(true);
+    snackbar.show("Secure password generated", "success");
+  }
+
+  function copyToClipboard() {
+    const text = `Email: ${email}\nPassword: ${password}`;
+    navigator.clipboard.writeText(text);
+    snackbar.show("Credentials copied to clipboard", "success");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrors({});
@@ -111,6 +128,7 @@ export function UserForm({ mode, initialData }: UserFormProps) {
         roleId: roleId || undefined,
         branchId: branchId || undefined,
         isActive,
+        password: password || undefined,
       });
 
       if (!result.success) {
@@ -249,15 +267,80 @@ export function UserForm({ mode, initialData }: UserFormProps) {
           )}
 
           {mode === "edit" && (
-            <div className="flex items-center justify-between px-1">
-              <label htmlFor="user-active" className="text-body-md text-on-surface cursor-pointer">
-                Active
-              </label>
-              <Switch
-                id="user-active"
-                checked={isActive}
-                onCheckedChange={setIsActive}
-              />
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-1">
+                <label htmlFor="user-active" className="text-body-md text-on-surface cursor-pointer">
+                  Active
+                </label>
+                <Switch
+                  id="user-active"
+                  checked={isActive}
+                  onCheckedChange={setIsActive}
+                />
+              </div>
+
+              <div className="border-t border-outline-variant/60 my-4"></div>
+
+              {/* Password Reset for Existing User */}
+              <div className="space-y-4">
+                <h3 className="text-body-md font-bold text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-[20px]">vpn_key</span>
+                  Reset User Password
+                </h3>
+                <p className="text-body-sm text-on-surface-variant leading-relaxed">
+                  Reset the password for this user. The user will be required to change this password on their next login for security reasons.
+                </p>
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <TextField
+                        label="New Password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        leadingIcon="lock"
+                        trailingIcon={showPassword ? "visibility_off" : "visibility"}
+                        onTrailingIconClick={() => setShowPassword(!showPassword)}
+                        error={errors.password}
+                        fullWidth
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outlined"
+                      icon="autorenew"
+                      className="mt-1"
+                      onClick={generateRandomPassword}
+                    >
+                      Generate
+                    </Button>
+                  </div>
+
+                  {password && (
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="text"
+                        icon="content_copy"
+                        onClick={copyToClipboard}
+                      >
+                        Copy Credentials
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="text"
+                        icon="clear"
+                        className="text-error"
+                        onClick={() => setPassword("")}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

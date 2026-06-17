@@ -30,7 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const user = await prisma.user.findUnique({
             where: { firebaseUid: decoded.uid },
             include: {
-              organization: { select: { id: true, slug: true, name: true, isActive: true } },
+              organization: { select: { id: true, slug: true, name: true, logo: true, isActive: true, isSetupComplete: true } },
               branch: { select: { id: true, name: true, code: true } },
               role: { select: { id: true, name: true } },
             },
@@ -50,8 +50,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             organizationId: user.organizationId,
             organizationSlug: user.organization.slug,
             organizationName: user.organization.name,
+            organizationLogo: user.organization.logo,
             branchId: user.branchId,
             branchName: user.branch?.name ?? null,
+            forcePasswordChange: user.forcePasswordChange,
+            tokenVersion: user.tokenVersion,
+            organizationIsSetupComplete: user.organization.isSetupComplete,
           };
         } catch (error) {
           console.error("Firebase token verification failed:", error);

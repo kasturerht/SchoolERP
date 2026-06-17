@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 interface DrawerContentProps {
   items: NavItemData[];
   orgName: string;
+  orgLogo?: string | null;
   onItemClick?: () => void;
   className?: string;
 }
@@ -17,9 +18,12 @@ interface DrawerContentProps {
 function DrawerContent({
   items,
   orgName,
+  orgLogo,
   onItemClick,
   className,
 }: DrawerContentProps) {
+  const logoUrl = orgLogo ? `/${orgLogo.replace(/\\/g, "/")}` : null;
+
   return (
     <div
       className={cn(
@@ -30,8 +34,18 @@ function DrawerContent({
       {/* Header */}
       <div className="flex h-20 items-center px-6 border-b border-slate-200/60 bg-white">
         <div className="flex items-center gap-3 w-full">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary shadow-md shadow-primary/20">
-            <Icon name="school" size={22} />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 overflow-hidden bg-slate-100 shadow-sm">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={`${orgName} Logo`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-primary text-on-primary shadow-md shadow-primary/20">
+                <Icon name="school" size={22} />
+              </div>
+            )}
           </div>
           <div className="flex flex-col min-w-0">
             <span className="truncate text-[15px] font-black text-slate-900 leading-tight tracking-tight">
@@ -64,12 +78,14 @@ function DrawerContent({
 interface StandardDrawerProps {
   items: NavItemData[];
   orgName: string;
+  orgLogo?: string | null;
   className?: string;
 }
 
 export function StandardDrawer({
   items,
   orgName,
+  orgLogo,
   className,
 }: StandardDrawerProps) {
   return (
@@ -79,7 +95,7 @@ export function StandardDrawer({
         className
       )}
     >
-      <DrawerContent items={items} orgName={orgName} />
+      <DrawerContent items={items} orgName={orgName} orgLogo={orgLogo} />
     </aside>
   );
 }
@@ -89,6 +105,7 @@ export function StandardDrawer({
 interface ModalDrawerProps {
   items: NavItemData[];
   orgName: string;
+  orgLogo?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -96,6 +113,7 @@ interface ModalDrawerProps {
 export function ModalDrawer({
   items,
   orgName,
+  orgLogo,
   open,
   onOpenChange,
 }: ModalDrawerProps) {
@@ -112,6 +130,7 @@ export function ModalDrawer({
           <DrawerContent
             items={items}
             orgName={orgName}
+            orgLogo={orgLogo}
             onItemClick={() => onOpenChange(false)}
             className="rounded-r-lg"
           />

@@ -23,6 +23,7 @@ export default async function DashboardLayout({
           image: session.user.image,
           role: session.user.roleName,
           organizationName: session.user.organizationName,
+          organizationLogo: session.user.organizationLogo,
         }}
       >
         {children}

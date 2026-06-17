@@ -88,12 +88,27 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return apiError("FORBIDDEN", "Cannot modify a SUPER_ADMIN user", 403);
     }
 
+    // Role Hierarchy Guard
+    const getRoleWeight = (name: string) => {
+      switch (name) {
+        case "SUPER_ADMIN": return 100;
+        case "SCHOOL_ADMIN": return 90;
+        case "BRANCH_ADMIN": return 80;
+        default: return 10;
+      }
+    };
+    const callerWeight = getRoleWeight(ctx.roleName);
+    const targetWeight = getRoleWeight(existing.role.name);
+    if (ctx.roleName !== "SUPER_ADMIN" && callerWeight <= targetWeight) {
+      return apiError("FORBIDDEN", "Insufficient privileges to modify a user with an equal or higher role level", 403);
+    }
+
     // Restrict branch-scoped roles from modifying users in another branch
     if (ctx.roleName !== "SUPER_ADMIN" && ctx.roleName !== "SCHOOL_ADMIN" && ctx.branchId && existing.branchId !== ctx.branchId) {
       return apiError("FORBIDDEN", "Cannot modify users in another branch", 403);
     }
 
-    const { name, phone, roleId, branchId, isActive } = parsed.data;
+    const { name, phone, roleId, branchId, isActive, password } = parsed.data;
 
     let targetRole = existing.role;
     if (roleId) {
@@ -130,12 +145,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     // Build update data
-    const data: Record<string, unknown> = {};
+    const data: Record<string, any> = {};
     if (name !== undefined) data.name = name;
     if (phone !== undefined) data.phone = phone || null;
     if (roleId !== undefined) data.roleId = roleId;
     if (branchId !== undefined) data.branchId = branchId;
     if (isActive !== undefined) data.isActive = isActive;
+
+    if (password) {
+      data.forcePasswordChange = true;
+      data.tokenVersion = { increment: 1 };
+    }
 
     // Sync Firebase display name if name changed
     if (name !== undefined) {
@@ -143,6 +163,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         await getAdminAuth().updateUser(existing.firebaseUid, { displayName: name });
       } catch (err) {
         console.error("Firebase updateUser displayName error:", err);
+      }
+    }
+
+    // Sync Firebase password if password provided
+    if (password) {
+      try {
+        await getAdminAuth().updateUser(existing.firebaseUid, { password });
+      } catch (err) {
+        console.error("Firebase updateUser password error:", err);
+        return apiError("INTERNAL_ERROR", "Failed to update credentials in authentication server", 500);
       }
     }
 
@@ -178,7 +208,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       action: "UPDATE",
       module: "USERS",
       entityId: user.id,
-      details: Object.keys(data),
+      details: password ? [...Object.keys(data), "password_reset"] : Object.keys(data),
     });
 
     return apiSuccess(user);

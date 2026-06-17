@@ -19,6 +19,7 @@ interface DashboardShellProps {
     image?: string | null;
     role: string;
     organizationName: string;
+    organizationLogo?: string | null;
   };
 }
 
@@ -58,6 +59,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       <StandardDrawer
         items={filteredItems}
         orgName={user.organizationName}
+        orgLogo={user.organizationLogo}
         className="hidden xl:block"
       />
 
@@ -72,6 +74,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
       <ModalDrawer
         items={filteredItems}
         orgName={user.organizationName}
+        orgLogo={user.organizationLogo}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
       />
@@ -88,6 +91,7 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
                 name={user.name}
                 email={user.email}
                 image={user.image}
+                roleName={user.role}
               />
             </>
           }

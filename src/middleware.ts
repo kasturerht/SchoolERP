@@ -40,6 +40,39 @@ export default auth((req) => {
   const session = req.auth;
 
   if (session?.user) {
+    // 1. Intercept user if password change is forced
+    if (
+      session.user.forcePasswordChange &&
+      pathname !== "/force-password-change" &&
+      !pathname.startsWith("/api")
+    ) {
+      return NextResponse.redirect(new URL("/force-password-change", req.nextUrl));
+    }
+
+    // 2. Intercept user if organization setup is incomplete
+    if (
+      !session.user.organizationIsSetupComplete &&
+      pathname !== "/onboarding" &&
+      pathname !== "/onboarding/pending" &&
+      !pathname.startsWith("/api") &&
+      !pathname.startsWith("/_next") &&
+      pathname !== "/favicon.ico"
+    ) {
+      if (session.user.roleName === "SCHOOL_ADMIN") {
+        return NextResponse.redirect(new URL("/onboarding", req.nextUrl));
+      } else {
+        return NextResponse.redirect(new URL("/onboarding/pending", req.nextUrl));
+      }
+    }
+
+    // 3. Prevent onboarded users from revisiting onboarding pages
+    if (
+      session.user.organizationIsSetupComplete &&
+      (pathname === "/onboarding" || pathname === "/onboarding/pending")
+    ) {
+      return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+    }
+
     headers.set("x-user-id", session.user.id);
     headers.set("x-user-role-id", session.user.roleId);
     headers.set("x-user-role-name", session.user.roleName);

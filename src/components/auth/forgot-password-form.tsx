@@ -24,8 +24,17 @@ export function ForgotPasswordForm() {
     try {
       await sendPasswordResetEmail(firebaseAuth, email);
       setSent(true);
-    } catch {
-      setError("Failed to send reset email. Check the email address.");
+    } catch (err: any) {
+      console.error("Firebase sendPasswordResetEmail error:", err);
+      let errMsg = "Failed to send reset email. Please try again.";
+      if (err.code === "auth/invalid-email") {
+        errMsg = "Please enter a valid email address.";
+      } else if (err.code === "auth/user-not-found") {
+        errMsg = "No account found with this email address.";
+      } else if (err.code === "auth/too-many-requests") {
+        errMsg = "Too many requests. Please try again later.";
+      }
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
@@ -33,35 +42,42 @@ export function ForgotPasswordForm() {
 
   return (
     <>
-      <Card variant="outlined">
-        <CardContent className="p-6">
+      <Card className="border border-slate-200/40 dark:border-slate-800/40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xl shadow-slate-100/30 dark:shadow-none rounded-2xl overflow-hidden">
+        <CardContent className="p-6 md:p-8">
           {sent ? (
-            <div className="text-center py-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-container mb-4">
+            <div className="text-center py-6 space-y-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-teal-50 dark:bg-teal-950/40 text-primary mb-2 shadow-inner">
                 <Icon
-                  name="mark_email_read"
+                  name="check_circle"
                   size={24}
-                  className="text-on-primary-container"
+                  className="text-primary animate-pulse"
                 />
               </div>
-              <p className="text-body-lg text-on-surface mb-2">
-                Check your email
-              </p>
-              <p className="text-body-md text-on-surface-variant mb-6">
-                We sent a password reset link to <strong>{email}</strong>
-              </p>
-              <Button variant="text" onClick={() => setSent(false)}>
-                Send again
-              </Button>
+              <div className="space-y-1">
+                <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-50">Check your email</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-xs mx-auto">
+                  We sent a secure password reset link to <strong className="text-slate-800 dark:text-slate-200">{email}</strong>
+                </p>
+              </div>
+              <div className="pt-2">
+                <Button 
+                  variant="text" 
+                  onClick={() => setSent(false)}
+                  className="text-xs font-bold text-primary hover:bg-slate-50 dark:hover:bg-slate-800/40 border-none bg-transparent"
+                >
+                  Send again
+                </Button>
+              </div>
             </div>
           ) : (
-            <>
-              <AuthErrorAlert message={error} />
+            <div className="space-y-5">
+              {error && <AuthErrorAlert message={error} />}
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <TextField
-                  label="Email"
+                  label="Email Address"
                   type="email"
+                  variant="compact"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   leadingIcon="mail"
@@ -76,20 +92,21 @@ export function ForgotPasswordForm() {
                   fullWidth
                   loading={loading}
                   icon="send"
+                  className="h-10 text-xs font-bold uppercase tracking-wider bg-primary text-white rounded-lg transition-transform active:scale-98 shadow-sm cursor-pointer border-none"
                 >
-                  Send reset link
+                  Send Reset Link
                 </Button>
               </form>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <p className="text-center mt-6 text-body-md text-on-surface-variant">
+      <p className="text-center mt-6 text-xs text-slate-500 dark:text-slate-400 font-medium">
         Remember your password?{" "}
         <Link
           href="/login"
-          className="text-primary font-medium hover:underline"
+          className="text-primary font-bold hover:underline"
         >
           Back to sign in
         </Link>

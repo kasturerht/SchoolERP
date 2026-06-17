@@ -18,6 +18,7 @@ model Organization {
   website               String?
   plan                  PlanType               @default(FREE)
   isActive              Boolean                @default(true)
+  isSetupComplete       Boolean                @default(false)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   academicYears         AcademicYear[]
@@ -84,17 +85,19 @@ model User {
   phone          String?
   avatar         String?
   roleId         String
-  isActive       Boolean          @default(true)
-  lastLoginAt    DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  parent         Parent?
-  staff          Staff?
-  student        Student?
-  permissions    UserPermission[]
-  branch         Branch?          @relation(fields: [branchId], references: [id])
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  role           Role             @relation(fields: [roleId], references: [id])
+  isActive            Boolean          @default(true)
+  forcePasswordChange Boolean          @default(false)
+  tokenVersion        Int              @default(1)
+  lastLoginAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  parent              Parent?
+  staff               Staff?
+  student             Student?
+  permissions         UserPermission[]
+  branch              Branch?          @relation(fields: [branchId], references: [id])
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role                Role             @relation(fields: [roleId], references: [id])
 
   @@unique([organizationId, email])
   @@index([organizationId])

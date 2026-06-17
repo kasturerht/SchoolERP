@@ -96,57 +96,69 @@ export function LoginForm() {
   }
 
   return (
-    <Card variant="outlined">
-      <CardContent className="p-6">
-        <form onSubmit={handleSubmit}>
-          <AuthErrorAlert message={error} />
+    <>
+      <Card variant="outlined">
+        <CardContent className="p-6">
+          <form onSubmit={handleSubmit}>
+            <AuthErrorAlert message={error} />
 
-          <div className="flex flex-col gap-5">
-            <TextField
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              leadingIcon="mail"
-              required
+            <div className="flex flex-col gap-5">
+              <TextField
+                label="Email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                leadingIcon="mail"
+                required
+                fullWidth
+                autoComplete="email"
+              />
+
+              <TextField
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                leadingIcon="lock"
+                trailingIcon={showPassword ? "visibility_off" : "visibility"}
+                onTrailingIconClick={() => setShowPassword(!showPassword)}
+                required
+                fullWidth
+                autoComplete="current-password"
+              />
+            </div>
+
+            <div className="flex justify-end mt-2 mb-6">
+              <Link
+                href="/forgot-password"
+                className="text-[14px] leading-5 font-medium text-primary hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            <Button
+              type="submit"
+              variant="filled"
               fullWidth
-              autoComplete="email"
-            />
-
-            <TextField
-              label="Password"
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              leadingIcon="lock"
-              trailingIcon={showPassword ? "visibility_off" : "visibility"}
-              onTrailingIconClick={() => setShowPassword(!showPassword)}
-              required
-              fullWidth
-              autoComplete="current-password"
-            />
-          </div>
-
-          <div className="flex justify-end mt-2 mb-6">
-            <Link
-              href="/forgot-password"
-              className="text-[14px] leading-5 font-medium text-primary hover:underline"
+              loading={loading}
+              icon="login"
             >
-              Forgot password?
-            </Link>
-          </div>
+              Sign in
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-          <Button
-            type="submit"
-            variant="filled"
-            fullWidth
-            loading={loading}
-            icon="login"
-          >
-            Sign in
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+      <p className="text-center mt-6 text-body-md text-on-surface-variant">
+        Don&apos;t have an account?{" "}
+        <Link
+          href="/register"
+          className="text-primary font-medium hover:underline"
+        >
+          Register here
+        </Link>
+      </p>
+    </>
   );
 }

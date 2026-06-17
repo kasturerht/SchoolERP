@@ -29,6 +29,12 @@ export const updateUserSchema = z.object({
   roleId: z.string().optional(),
   branchId: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password must be at most 128 characters")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

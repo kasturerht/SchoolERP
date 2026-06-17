@@ -155,6 +155,5 @@ export const NAVIGATION_ITEMS = [
   { label: "Notices", href: "/notices", icon: "campaign", permission: "notices:read" },
   // { label: "Events", href: "/communication/events", icon: "event", permission: "events:read" },
   // { label: "Reports", href: "/reports", icon: "analytics", permission: "reports:view" },
-  
-  // { label: "Settings", href: "/settings/general", icon: "settings", permission: "settings:manage" },
+  { label: "School Settings", href: "/settings", icon: "settings", permission: "settings:manage" },
 ];

@@ -19,11 +19,15 @@ export const authConfig: NextAuthConfig = {
         token.organizationId = user.organizationId;
         token.organizationSlug = user.organizationSlug;
         token.organizationName = user.organizationName;
+        token.organizationLogo = user.organizationLogo;
         token.branchId = user.branchId;
         token.branchName = user.branchName;
+        token.forcePasswordChange = user.forcePasswordChange;
+        token.tokenVersion = user.tokenVersion;
+        token.organizationIsSetupComplete = user.organizationIsSetupComplete;
       }
-
-      // Handle session.update() calls (e.g. branch switching)
+ 
+      // Handle session.update() calls (e.g. branch switching, password resets, onboarding complete)
       if (trigger === "update" && session) {
         if (session.branchId !== undefined) {
           token.branchId = session.branchId;
@@ -31,8 +35,20 @@ export const authConfig: NextAuthConfig = {
         if (session.branchName !== undefined) {
           token.branchName = session.branchName;
         }
+        if (session.forcePasswordChange !== undefined) {
+          token.forcePasswordChange = session.forcePasswordChange;
+        }
+        if (session.tokenVersion !== undefined) {
+          token.tokenVersion = session.tokenVersion;
+        }
+        if (session.organizationIsSetupComplete !== undefined) {
+          token.organizationIsSetupComplete = session.organizationIsSetupComplete;
+        }
+        if (session.organizationLogo !== undefined) {
+          token.organizationLogo = session.organizationLogo;
+        }
       }
-
+ 
       return token;
     },
     async session({ session, token }) {
@@ -42,8 +58,12 @@ export const authConfig: NextAuthConfig = {
       session.user.organizationId = token.organizationId as string;
       session.user.organizationSlug = token.organizationSlug as string;
       session.user.organizationName = token.organizationName as string;
+      session.user.organizationLogo = (token.organizationLogo as string | null) ?? null;
       session.user.branchId = token.branchId as string | null;
       session.user.branchName = token.branchName as string | null;
+      session.user.forcePasswordChange = (token.forcePasswordChange as boolean) ?? false;
+      session.user.tokenVersion = (token.tokenVersion as number) ?? 1;
+      session.user.organizationIsSetupComplete = (token.organizationIsSetupComplete as boolean) ?? false;
       return session;
     },
     authorized({ auth, request: { nextUrl } }) {

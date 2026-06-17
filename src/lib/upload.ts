@@ -179,7 +179,7 @@ export async function saveUploadedImage(
     .toBuffer();
 
   const fileName = `${prefix}_${Date.now()}.webp`;
-  const filePath = path.join(subDir, fileName);
+  const filePath = path.join(subDir, fileName).replace(/\\/g, "/");
 
   if (process.env.UPLOAD_PROXY_URL) {
     // Production: send to cPanel via HTTP proxy

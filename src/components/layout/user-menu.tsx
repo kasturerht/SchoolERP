@@ -13,6 +13,7 @@ interface UserMenuProps {
   name: string;
   email: string;
   image?: string | null;
+  roleName?: string;
 }
 
 function getInitials(name: string): string {
@@ -24,7 +25,7 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export function UserMenu({ name, email, image }: UserMenuProps) {
+export function UserMenu({ name, email, image, roleName }: UserMenuProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -85,6 +86,19 @@ export function UserMenu({ name, email, image }: UserMenuProps) {
               <Icon name="person" size={20} className="text-on-surface-variant" />
               Profile
             </DropdownMenu.Item>
+
+            {(roleName === "SCHOOL_ADMIN" || roleName === "SUPER_ADMIN") && (
+              <DropdownMenu.Item
+                className={cn(
+                  "state-layer focus-ring flex cursor-pointer items-center gap-3 rounded-xs px-3 py-2 text-body-md text-on-surface outline-none after:bg-on-surface",
+                  "data-[highlighted]:bg-on-surface/8"
+                )}
+                onSelect={() => router.push("/settings")}
+              >
+                <Icon name="settings" size={20} className="text-on-surface-variant" />
+                School Settings
+              </DropdownMenu.Item>
+            )}
 
             <DropdownMenu.Separator className="my-1 h-px bg-outline-variant" />
 

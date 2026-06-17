@@ -139,6 +139,25 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
 
   const [createAccount, setCreateAccount] = useState(false);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  function generateRandomPassword() {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let generated = "";
+    for (let i = 0; i < 12; i++) {
+      generated += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setPassword(generated);
+    setShowPassword(true);
+    snackbar.show("Secure password generated", "success");
+  }
+
+  function copyToClipboard() {
+    const emailToUse = email || initialData?.email || "";
+    const text = `Email: ${emailToUse}\nPassword: ${password}`;
+    navigator.clipboard.writeText(text);
+    snackbar.show("Credentials copied to clipboard", "success");
+  }
 
   // Auto-assign branch for non-SUPER_ADMIN users
   useEffect(() => {
@@ -937,15 +956,73 @@ export function StaffForm({ mode, initialData }: StaffFormProps) {
                     </div>
                     <TextField
                       label="Initial Password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       leadingIcon="key"
+                      trailingIcon={showPassword ? "visibility_off" : "visibility"}
+                      onTrailingIconClick={() => setShowPassword(!showPassword)}
                       error={errors.password}
                       required={createAccount}
                       fullWidth
                       helperText="Password must be at least 6 characters"
                     />
+                  </div>
+                )}
+
+                {initialData?.userId && (
+                  <div className="space-y-4 p-5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/10 border border-indigo-100/50 dark:border-indigo-900/10 animate-in fade-in duration-300">
+                    <div className="flex gap-3 text-indigo-700 dark:text-indigo-300 text-xs font-medium mb-1">
+                      <span className="material-symbols-outlined text-[20px] shrink-0 text-indigo-500">info</span>
+                      <span>This member already has a login account. You can reset their password below. The user will be required to change it on their next login.</span>
+                    </div>
+                    <div className="flex gap-3 items-start">
+                      <div className="flex-1">
+                        <TextField
+                          label="Reset Password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          leadingIcon="lock"
+                          trailingIcon={showPassword ? "visibility_off" : "visibility"}
+                          onTrailingIconClick={() => setShowPassword(!showPassword)}
+                          error={errors.password}
+                          fullWidth
+                          helperText="Password must be at least 6 characters"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        icon="autorenew"
+                        className="mt-1"
+                        onClick={generateRandomPassword}
+                      >
+                        Generate
+                      </Button>
+                    </div>
+
+                    {password && (
+                      <div className="flex justify-end gap-2 mt-2">
+                        <Button
+                          type="button"
+                          variant="text"
+                          icon="content_copy"
+                          onClick={copyToClipboard}
+                        >
+                          Copy Credentials
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="text"
+                          icon="clear"
+                          className="text-error"
+                          onClick={() => setPassword("")}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 

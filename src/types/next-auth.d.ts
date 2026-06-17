@@ -9,8 +9,12 @@ declare module "next-auth" {
     organizationId: string;
     organizationSlug: string;
     organizationName: string;
+    organizationLogo?: string | null;
     branchId: string | null;
     branchName: string | null;
+    forcePasswordChange: boolean;
+    tokenVersion: number;
+    organizationIsSetupComplete: boolean;
   }
 
   interface Session {
@@ -18,6 +22,9 @@ declare module "next-auth" {
       email: string;
       name: string;
       image?: string | null;
+      forcePasswordChange: boolean;
+      tokenVersion: number;
+      organizationIsSetupComplete: boolean;
     };
   }
 }
@@ -30,7 +37,11 @@ declare module "next-auth/jwt" {
     organizationId: string;
     organizationSlug: string;
     organizationName: string;
+    organizationLogo?: string | null;
     branchId: string | null;
     branchName: string | null;
+    forcePasswordChange?: boolean;
+    tokenVersion?: number;
+    organizationIsSetupComplete?: boolean;
   }
 }

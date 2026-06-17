@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { sendPasswordResetEmail } from "firebase/auth";
+import { sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
+import { signOut } from "next-auth/react";
 import { auth as firebaseAuth } from "@/lib/firebase";
 import { useSnackbar } from "@/components/ui/snackbar";
 import { TextField } from "@/components/ui/text-field";
@@ -62,6 +63,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showDirectPassword, setShowDirectPassword] = useState(false);
+  const [changingDirect, setChangingDirect] = useState(false);
   
   const [user, setUser] = useState<UserData | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogData[]>([]);
@@ -182,6 +188,90 @@ export default function ProfilePage() {
     } finally {
       setResetting(false);
     }
+  }
+
+  // Handle Direct Password Change (Google/Meta style re-auth)
+  async function handleDirectPasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user?.email || !firebaseAuth.currentUser) return;
+
+    if (newPassword.length < 8) {
+      snackbar.show("New password must be at least 8 characters", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      snackbar.show("Passwords do not match", "error");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      snackbar.show("New password must be different from current password", "error");
+      return;
+    }
+
+    setChangingDirect(true);
+    try {
+      // 1. Re-authenticate user
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(firebaseAuth.currentUser, credential);
+
+      // 2. Change password in Firebase
+      await updatePassword(firebaseAuth.currentUser, newPassword);
+
+      // 3. Update database: increment tokenVersion and forcePasswordChange = false
+      const res = await fetch("/api/v1/profile/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error?.message ?? "Database update failed");
+      }
+
+      snackbar.show("Password changed successfully! Logging out...", "success");
+
+      // 4. Force global logout by signing out current session
+      setTimeout(() => {
+        signOut({ callbackUrl: "/login?message=password-changed" });
+      }, 1500);
+    } catch (error: any) {
+      console.error("Direct password change error:", error);
+      let errMsg = "Failed to change password. Please check your credentials.";
+      if (error.code === "auth/wrong-password" || error.message?.includes("auth/wrong-password")) {
+        errMsg = "Incorrect current password.";
+      } else if (error.code === "auth/requires-recent-login") {
+        errMsg = "Session timeout. Please sign out and sign back in to change password.";
+      } else if (error.message) {
+        errMsg = error.message;
+      }
+      snackbar.show(errMsg, "error");
+    } finally {
+      setChangingDirect(false);
+    }
+  }
+
+  // Password criteria verification
+  const passwordCriteria = {
+    length: newPassword.length >= 8,
+    upper: /[A-Z]/.test(newPassword),
+    lower: /[a-z]/.test(newPassword),
+    number: /[0-9]/.test(newPassword),
+    symbol: /[^A-Za-z0-9]/.test(newPassword),
+  };
+  const metCount = Object.values(passwordCriteria).filter(Boolean).length;
+  const isPasswordSecure = metCount >= 4; // requires 4/5 items
+
+  let strengthLabel = "Weak";
+  let strengthColor = "bg-error text-on-error";
+  if (metCount >= 5) {
+    strengthLabel = "Very Strong";
+    strengthColor = "bg-success text-on-success";
+  } else if (metCount >= 4) {
+    strengthLabel = "Strong";
+    strengthColor = "bg-primary text-on-primary";
+  } else if (metCount >= 3) {
+    strengthLabel = "Medium";
+    strengthColor = "bg-warning text-on-warning";
   }
 
   // Group permissions by module
@@ -479,23 +569,126 @@ export default function ProfilePage() {
                     Account Security & Credentials
                   </h3>
                 </div>
-                <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h4 className="text-body-md font-bold text-on-surface">Change Account Password</h4>
-                    <p className="text-body-sm text-on-surface-variant max-w-lg">
-                      Trigger a secure, encrypted password reset link directly to your registered email address (`{user.email}`).
-                    </p>
+                <CardContent className="p-6 space-y-6">
+                  <form onSubmit={handleDirectPasswordChange} className="space-y-5">
+                    <h4 className="text-body-md font-bold text-on-surface">Change Password Directly</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <TextField
+                        label="Current Password"
+                        type={showDirectPassword ? "text" : "password"}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        leadingIcon="lock"
+                        required
+                        fullWidth
+                      />
+                      <TextField
+                        label="New Password"
+                        type={showDirectPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        leadingIcon="key"
+                        required
+                        fullWidth
+                      />
+                      <TextField
+                        label="Confirm New Password"
+                        type={showDirectPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        leadingIcon="key"
+                        required
+                        fullWidth
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowDirectPassword(!showDirectPassword)}
+                          className="flex items-center gap-1.5 text-body-sm text-primary hover:underline font-medium cursor-pointer"
+                        >
+                          <Icon name={showDirectPassword ? "visibility_off" : "visibility"} size={16} />
+                          {showDirectPassword ? "Hide Passwords" : "Show Passwords"}
+                        </button>
+                      </div>
+
+                      <Button
+                        type="submit"
+                        variant="filled"
+                        loading={changingDirect}
+                        icon="check"
+                        disabled={!isPasswordSecure || changingDirect}
+                      >
+                        Change Password
+                      </Button>
+                    </div>
+
+                    {/* Live Strength Checklist */}
+                    {newPassword && (
+                      <div className="p-4 rounded-xl bg-surface-dim/50 border border-outline-variant/60 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-body-sm font-bold text-on-surface">Password Strength:</span>
+                          <span className={cn("text-label-sm font-bold px-2 py-0.5 rounded-full", strengthColor)}>
+                            {strengthLabel}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-outline-variant rounded-full overflow-hidden">
+                          <div
+                            className={cn("h-full transition-all duration-300", 
+                              metCount >= 4 ? "bg-success" : metCount >= 3 ? "bg-warning" : "bg-error"
+                            )}
+                            style={{ width: `${(metCount / 5) * 100}%` }}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-body-xs font-medium">
+                          <div className={cn("flex items-center gap-1", passwordCriteria.length ? "text-success" : "text-on-surface-variant")}>
+                            <Icon name={passwordCriteria.length ? "check_circle" : "cancel"} size={14} />
+                            8+ Characters
+                          </div>
+                          <div className={cn("flex items-center gap-1", passwordCriteria.upper ? "text-success" : "text-on-surface-variant")}>
+                            <Icon name={passwordCriteria.upper ? "check_circle" : "cancel"} size={14} />
+                            Uppercase
+                          </div>
+                          <div className={cn("flex items-center gap-1", passwordCriteria.lower ? "text-success" : "text-on-surface-variant")}>
+                            <Icon name={passwordCriteria.lower ? "check_circle" : "cancel"} size={14} />
+                            Lowercase
+                          </div>
+                          <div className={cn("flex items-center gap-1", passwordCriteria.number ? "text-success" : "text-on-surface-variant")}>
+                            <Icon name={passwordCriteria.number ? "check_circle" : "cancel"} size={14} />
+                            Number
+                          </div>
+                          <div className={cn("flex items-center gap-1", passwordCriteria.symbol ? "text-success" : "text-on-surface-variant")}>
+                            <Icon name={passwordCriteria.symbol ? "check_circle" : "cancel"} size={14} />
+                            Symbol
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </form>
+
+                  <div className="border-t border-outline-variant/60 pt-5">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <h4 className="text-body-md font-bold text-on-surface">Reset via Email Link</h4>
+                        <p className="text-body-sm text-on-surface-variant max-w-lg">
+                          If you prefer, trigger a secure password reset link directly to your registered email address (`{user.email}`).
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="tonal"
+                        loading={resetting}
+                        icon="send"
+                        onClick={handlePasswordReset}
+                        className="shrink-0 cursor-pointer"
+                      >
+                        Send Reset Email
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    type="button"
-                    variant="tonal"
-                    loading={resetting}
-                    icon="send"
-                    onClick={handlePasswordReset}
-                    className="shrink-0 cursor-pointer"
-                  >
-                    Send Reset Email
-                  </Button>
                 </CardContent>
               </Card>
             </div>
